@@ -1,9 +1,9 @@
 import os
 import typer
-import cr8tor.core.schema as s
+import cr8tor.airlock.schema as s
 import cr8tor.cli.utils as cli_utils
-import cr8tor.core.resourceops as project_resources
-import cr8tor.core.crate_graph as proj_graph
+import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.crate_graph as proj_graph
 
 from pathlib import Path
 from typing import Annotated

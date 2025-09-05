@@ -11,9 +11,9 @@ import re
 from cookiecutter.main import cookiecutter
 from cookiecutter.exceptions import OutputDirExistsException, FailedHookException
 from cr8tor.utils import log
-import cr8tor.core.resourceops as project_resources
-import cr8tor.core.schema as schemas
-import cr8tor.core.gh_rest_api_client as gh_rest_api_client
+import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.schema as schemas
+import cr8tor.airlock.gh_rest_api_client as gh_rest_api_client
 
 app = typer.Typer()
 
