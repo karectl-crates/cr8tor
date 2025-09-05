@@ -4,15 +4,13 @@ import secrets
 
 
 def generate_temp_password(length=16):
-    """ Generate a random temporary password for a user.
-    """
+    """Generate a random temporary password for a user."""
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*()"
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def write_passwords(username, temp_password, directory="/tmp/user-passwords"):
-    """ Write the temporary password for a user to a file.
-    """
+    """Write the temporary password for a user to a file."""
     os.makedirs(directory, exist_ok=True)
     file_path = os.path.join(directory, f"{username}.txt")
 

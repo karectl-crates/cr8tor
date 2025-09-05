@@ -4,8 +4,7 @@ from .utils import generate_temp_password, write_passwords
 
 
 def sync_keycloak_user(username, spec):
-    """ Sync a user to Keycloak. 
-    """
+    """Sync a user to Keycloak."""
     keycloak_client = get_client()
     email = spec.get("email")
     enabled = spec.get("enabled", True)
@@ -18,8 +17,7 @@ def sync_keycloak_user(username, spec):
         try:
             # Try updating the user
             keycloak_client.update_user(
-                user_id,
-                {"email": email, "enabled": enabled, "username": username}
+                user_id, {"email": email, "enabled": enabled, "username": username}
             )
         except KeycloakPutError as err:
             if "User not found" in str(err):
@@ -43,12 +41,14 @@ def sync_keycloak_user(username, spec):
     user_id = keycloak_client.get_user_id(username)
 
     for group in keycloak_client.get_user_groups(user_id):
-        keycloak_client.group_user_remove(user_id, group['id'])
+        keycloak_client.group_user_remove(user_id, group["id"])
 
     for groupname in groups:
-        group = [grp for grp in keycloak_client.get_groups() if grp['name'] == groupname]
+        group = [
+            grp for grp in keycloak_client.get_groups() if grp["name"] == groupname
+        ]
         if group:
-            keycloak_client.group_user_add(user_id, group[0]['id'])
+            keycloak_client.group_user_add(user_id, group[0]["id"])
         else:
             print(f"[WARN] Group {groupname} not found")
 
@@ -62,8 +62,7 @@ def sync_keycloak_user(username, spec):
 
 
 def delete_keycloak_user(username):
-    """ Delete a user from Keycloak.
-    """
+    """Delete a user from Keycloak."""
     keycloak_client = get_client()
     try:
         user_id = keycloak_client.get_user_id(username)

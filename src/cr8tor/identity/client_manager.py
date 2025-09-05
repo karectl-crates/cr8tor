@@ -5,14 +5,15 @@ from .client import get_client
 
 
 def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
-    """ Assign client scopes to a client
-    """
+    """Assign client scopes to a client"""
     try:
         available_scopes = kc.get_client_scopes()
-        
+
         for scope_name in scope_names:
-            scope_obj = next((s for s in available_scopes if s['name'] == scope_name), None)
-            
+            scope_obj = next(
+                (s for s in available_scopes if s["name"] == scope_name), None
+            )
+
             if scope_obj:
                 if scope_type == "default":
                     kc.add_client_default_client_scope(client_uuid, scope_obj["id"])
@@ -26,8 +27,7 @@ def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
 
 
 def create_protocol_mappers(kc, client_uuid, mappers):
-    """ Create protocol mappers for a client
-    """
+    """Create protocol mappers for a client"""
     try:
         for mapper in mappers:
             mapper_payload = {
@@ -35,19 +35,23 @@ def create_protocol_mappers(kc, client_uuid, mappers):
                 "protocol": mapper.get("protocol", "openid-connect"),
                 "protocolMapper": mapper["protocolMapper"],
                 "consentRequired": mapper.get("consentRequired", False),
-                "config": mapper.get("config", {})
+                "config": mapper.get("config", {}),
             }
-            
+
             existing_mappers = kc.get_client_protocol_mappers(client_uuid)
-            existing_mapper = next((m for m in existing_mappers if m['name'] == mapper["name"]), None)
-            
+            existing_mapper = next(
+                (m for m in existing_mappers if m["name"] == mapper["name"]), None
+            )
+
             if existing_mapper:
-                kc.update_client_protocol_mapper(client_uuid, existing_mapper["id"], mapper_payload)
+                kc.update_client_protocol_mapper(
+                    client_uuid, existing_mapper["id"], mapper_payload
+                )
                 print(f"Updated protocol mapper '{mapper['name']}'")
             else:
                 kc.create_client_protocol_mapper(client_uuid, mapper_payload)
                 print(f"Created protocol mapper '{mapper['name']}'")
-                
+
     except Exception as e:
         print(f"Error creating protocol mappers: {e}")
 
@@ -55,7 +59,7 @@ def create_protocol_mappers(kc, client_uuid, mappers):
 def sync_keycloak_client(client_id, spec):
     kc = get_client()
     clients = kc.get_clients()
-    client_obj = next((c for c in clients if c['clientId'] == client_id), None)
+    client_obj = next((c for c in clients if c["clientId"] == client_id), None)
 
     secret_value = None
     if "secretRef" in spec:
@@ -65,11 +69,10 @@ def sync_keycloak_client(client_id, spec):
             namespace = os.environ.get("KUBERNETES_NAMESPACE", "keycloak")
 
             secret = v1.read_namespaced_secret(
-                name=spec["secretRef"]["name"],
-                namespace=namespace
+                name=spec["secretRef"]["name"], namespace=namespace
             )
             secret_key = spec["secretRef"].get("key", "client-secret")
-            secret_value = base64.b64decode(secret.data[secret_key]).decode('utf-8')
+            secret_value = base64.b64decode(secret.data[secret_key]).decode("utf-8")
             print(f"Retrieved secret for {client_id} from {spec['secretRef']['name']}")
 
         except Exception as e:
@@ -92,7 +95,7 @@ def sync_keycloak_client(client_id, spec):
         "protocol": "openid-connect",
         "publicClient": False,
         "standardFlowEnabled": True,
-        "directAccessGrantsEnabled": True
+        "directAccessGrantsEnabled": True,
     }
 
     if "additionalConfig" in spec:
@@ -104,15 +107,19 @@ def sync_keycloak_client(client_id, spec):
             client_uuid = client_obj["id"]
             print(f"Updated Keycloak client {client_id}")
         else:
-            client_uuid = kc.create_client(payload)    
+            client_uuid = kc.create_client(payload)
             print(f"Created Keycloak client {client_id}")
 
         # Handle client scope assignments
         if "defaultClientScopes" in spec:
-            assign_client_scopes(kc, client_uuid, spec["defaultClientScopes"], scope_type="default")
-        
+            assign_client_scopes(
+                kc, client_uuid, spec["defaultClientScopes"], scope_type="default"
+            )
+
         if "optionalClientScopes" in spec:
-            assign_client_scopes(kc, client_uuid, spec["optionalClientScopes"], scope_type="optional")
+            assign_client_scopes(
+                kc, client_uuid, spec["optionalClientScopes"], scope_type="optional"
+            )
 
         # Handle protocol mappers
         if "protocolMappers" in spec:
@@ -126,7 +133,7 @@ def sync_keycloak_client(client_id, spec):
 def delete_keycloak_client(client_id):
     kc = get_client()
     clients = kc.get_clients()
-    client_obj = next((c for c in clients if c['clientId'] == client_id), None)
+    client_obj = next((c for c in clients if c["clientId"] == client_id), None)
 
     if client_obj:
         kc.delete_client(client_obj["id"])
