@@ -1,0 +1,203 @@
+"""VDI Handler for managing VDIInstance custom resources using Kopf."""
+
+import logging
+
+import kopf
+import kubernetes
+import datetime
+import yaml
+import jinja2
+
+
+def patch_kopf_filter():
+    """Patch the specific filter method that's causing the TypeError"""
+    from kopf._core.engines.posting import K8sPoster
+
+    original_filter = K8sPoster.filter
+
+    def patched_filter(self, record):
+        try:
+            settings = getattr(record, "settings", None)
+            if (
+                settings is not None
+                and hasattr(settings, "posting")
+                and hasattr(settings.posting, "level")
+            ):
+                if isinstance(settings.posting.level, str):
+                    settings.posting.level = getattr(
+                        logging, settings.posting.level.upper(), logging.INFO
+                    )
+            return original_filter(self, record)
+        except Exception:
+            return False
+
+    K8sPoster.filter = patched_filter
+
+
+patch_kopf_filter()
+
+
+@kopf.on.startup()
+def configure(settings: kopf.OperatorSettings, **_):
+    print("Starting VDI Controller", flush=True)
+    kubernetes.config.load_incluster_config()
+    settings.posting.enabled = False
+
+    settings.watching.server_timeout = 60
+    settings.batching.worker_limit = 5
+
+    settings.posting.level = logging.INFO
+    print(
+        f"LOG LEVEL = {settings.posting.level} ({type(settings.posting.level)})",
+        flush=True,
+    )
+
+
+def render_pod_template(
+    name, namespace, user, project, image, connection, password, env_vars=None
+):
+    if env_vars is None:
+        env_vars = []
+
+    v1 = kubernetes.client.CoreV1Api()
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader("/app/templates"),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    template = env.get_template("vdi-pod-template.yaml.j2")
+    return template.render(
+        name=name,
+        namespace=namespace,
+        user=str(user),
+        project=str(project),
+        image=image,
+        password=password,
+        connection=connection,
+        env_vars=env_vars,
+    )
+
+
+@kopf.on.create("karectl.io", "v1alpha1", "vdiinstances")
+def create_vdi(spec, name, namespace, patch, body, **kwargs):
+    patch.status["phase"] = "Pending"
+
+    user = spec["user"]
+    project = spec["project"]
+    image = spec.get("image", "ghcr.io/alwin-k-thomas/vdi-mate:dev")
+    connection = spec.get("connection", "rdp")
+    env_vars = spec.get("env", [])
+
+    print(f"Spec keys: {list(spec.keys())}", flush=True)
+    print(f"Full spec: {spec}", flush=True)
+    print(f"Environment variables from spec: {env_vars}", flush=True)
+    print(f"About to patch status: {dict(patch.status)}", flush=True)
+
+    pod_yaml = render_pod_template(
+        name, namespace, user, project, image, connection, None, env_vars
+    )
+
+    resources = list(yaml.safe_load_all(pod_yaml))
+    api = kubernetes.client.CoreV1Api()
+
+    owner_ref = {
+        "apiVersion": "karectl.io/v1alpha1",
+        "kind": "VDIInstance",
+        "name": name,
+        "uid": body["metadata"]["uid"],
+        "controller": True,
+        "blockOwnerDeletion": True,
+    }
+    created_resources = []
+    for resource in resources:
+        if resource is None:
+            continue
+
+        resource.setdefault("metadata", {}).setdefault("ownerReferences", []).append(
+            owner_ref
+        )
+
+        try:
+            if resource["kind"] == "Pod":
+                api.create_namespaced_pod(namespace=namespace, body=resource)
+                print(f"Created VDI pod: vdi-{name}", flush=True)
+                created_resources.append(f"Pod:vdi-{name}")
+            elif resource["kind"] == "Service":
+                api.create_namespaced_service(namespace=namespace, body=resource)
+                print(f"Created VDI service: vdi-{user}-{project}", flush=True)
+                created_resources.append(f"Service:vdi-{user}-{project}")
+        except kubernetes.client.exceptions.ApiException as e:
+            if e.status == 409:
+                print(
+                    f"Resource already exists: {resource['kind']} {resource['metadata']['name']}",
+                    flush=True,
+                )
+            else:
+                print(f"Failed to create {resource['kind']}: {e}", flush=True)
+                raise
+
+    patch.status["phase"] = "Running"
+    print(
+        f"SSO VDI created: {name} with {len(created_resources)} resources", flush=True
+    )
+    print(f"Created resources: {created_resources}", flush=True)
+
+
+@kopf.on.delete("karectl.io", "v1alpha1", "vdiinstances")
+def delete_vdi(spec, name, namespace, patch, **kwargs):
+    print(f"Deleting VDI: {name}", flush=True)
+    user = spec["user"]
+    project = spec["project"]
+
+    pod_name = f"vdi-{name}"
+    service_name = f"vdi-{user}-{project}"
+
+    api = kubernetes.client.CoreV1Api()
+
+    try:
+        api.delete_namespaced_pod(name=pod_name, namespace=namespace)
+        print(f"Deleted pod {pod_name}", flush=True)
+
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 404:
+            print(f"Failed to delete pod {pod_name}: {e}", flush=True)
+
+    # Delete service
+    try:
+        api.delete_namespaced_service(name=service_name, namespace=namespace)
+        print(f"Deleted service {service_name}", flush=True)
+    except kubernetes.client.exceptions.ApiException as e:
+        if e.status != 404:
+            print(f"Failed to delete service {service_name}: {e}", flush=True)
+
+    patch.status["phase"] = "Terminated"
+
+
+@kopf.on.update("karectl.io", "v1alpha1", "vdiinstances")
+def update_vdi(spec, name, namespace, patch, body, **kwargs):
+    """Handle VDI updates, particularly for token refresh"""
+    print(f"Updating VDI: {name}", flush=True)
+
+    # Check if environment variables changed (token refresh)
+    old_env = body.get("status", {}).get("env_vars", [])
+    new_env = spec.get("env", [])
+
+    if old_env != new_env:
+        print(f"Environment variables updated for VDI: {name}", flush=True)
+
+        api = kubernetes.client.CoreV1Api()
+        pod_name = f"vdi-{name}"
+
+        try:
+            api.delete_namespaced_pod(name=pod_name, namespace=namespace)
+            print(f"Deleted pod for restart with new tokens: {pod_name}", flush=True)
+
+            # Update status to track env vars
+            patch.status["env_vars"] = new_env
+            patch.status["last_updated"] = datetime.datetime.now(
+                datetime.timezone.utc
+            ).isoformat()
+
+        except kubernetes.client.exceptions.ApiException as e:
+            if e.status != 404:
+                print(f"Failed to delete pod for update: {e}", flush=True)
