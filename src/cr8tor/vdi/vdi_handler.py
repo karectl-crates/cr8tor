@@ -4,6 +4,7 @@ import logging
 
 import kopf
 import kubernetes
+from kubernetes.client.exceptions import ApiException
 import datetime
 import yaml
 import jinja2
@@ -37,20 +38,8 @@ def patch_kopf_filter():
 patch_kopf_filter()
 
 
-@kopf.on.startup()
-def configure(settings: kopf.OperatorSettings, **_):
-    print("Starting VDI Controller", flush=True)
-    kubernetes.config.load_incluster_config()
-    settings.posting.enabled = False
-
-    settings.watching.server_timeout = 60
-    settings.batching.worker_limit = 5
-
-    settings.posting.level = logging.INFO
-    print(
-        f"LOG LEVEL = {settings.posting.level} ({type(settings.posting.level)})",
-        flush=True,
-    )
+# Note: Startup configuration is now handled in main.py to avoid conflicts
+# kubernetes.config is loaded in main.py
 
 
 def render_pod_template(
@@ -59,7 +48,6 @@ def render_pod_template(
     if env_vars is None:
         env_vars = []
 
-    v1 = kubernetes.client.CoreV1Api()
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader("/app/templates"),
         trim_blocks=True,
@@ -126,7 +114,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
                 api.create_namespaced_service(namespace=namespace, body=resource)
                 print(f"Created VDI service: vdi-{user}-{project}", flush=True)
                 created_resources.append(f"Service:vdi-{user}-{project}")
-        except kubernetes.client.exceptions.ApiException as e:
+        except ApiException as e:
             if e.status == 409:
                 print(
                     f"Resource already exists: {resource['kind']} {resource['metadata']['name']}",
@@ -158,7 +146,7 @@ def delete_vdi(spec, name, namespace, patch, **kwargs):
         api.delete_namespaced_pod(name=pod_name, namespace=namespace)
         print(f"Deleted pod {pod_name}", flush=True)
 
-    except kubernetes.client.exceptions.ApiException as e:
+    except ApiException as e:
         if e.status != 404:
             print(f"Failed to delete pod {pod_name}: {e}", flush=True)
 
@@ -166,7 +154,7 @@ def delete_vdi(spec, name, namespace, patch, **kwargs):
     try:
         api.delete_namespaced_service(name=service_name, namespace=namespace)
         print(f"Deleted service {service_name}", flush=True)
-    except kubernetes.client.exceptions.ApiException as e:
+    except ApiException as e:
         if e.status != 404:
             print(f"Failed to delete service {service_name}: {e}", flush=True)
 
@@ -198,6 +186,6 @@ def update_vdi(spec, name, namespace, patch, body, **kwargs):
                 datetime.timezone.utc
             ).isoformat()
 
-        except kubernetes.client.exceptions.ApiException as e:
+        except ApiException as e:
             if e.status != 404:
                 print(f"Failed to delete pod for update: {e}", flush=True)

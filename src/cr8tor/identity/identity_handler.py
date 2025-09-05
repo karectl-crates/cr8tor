@@ -8,13 +8,7 @@ from .client import ensure_realm_exists
 
 
 # https://www.reddit.com/r/kubernetes/comments/1dge5qk/writing_an_operator_with_kopf/
-@kopf.on.startup()
-def configure(settings: kopf.OperatorSettings, **_):
-    """Configure the operator."""
-    # Limit to 1 worker to avoid flooding K8s API server
-    settings.batching.worker_limit = 1
-    # Prevent Kopf from spamming K8s Events (optional, but reduces noise/load)
-    settings.posting.enabled = False
+# Note: Startup configuration is now handled in main.py to avoid conflicts
 
 
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
