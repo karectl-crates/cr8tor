@@ -1,6 +1,5 @@
 import os
 from keycloak import KeycloakAdmin
-from keycloak.exceptions import KeycloakGetError
 
 
 def get_client():
