@@ -22,7 +22,8 @@ class HTTPResponse(BaseModel, frozen=True):
 
 class SuccessResponse(BaseModel):
     # status: Literal["success"]
-    # payload: dict
+    payload: dict
+
     class Config:
         extra = "allow"
 
