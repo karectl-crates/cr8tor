@@ -1,8 +1,8 @@
 import bagit
 import typer
 import rocrate.model as m
-import cr8tor.core.schema as s
-import cr8tor.core.resourceops as project_resources
+import cr8tor.airlock.schema as s
+import cr8tor.airlock.resourceops as project_resources
 from pathlib import Path
 from typing import Annotated
 from rocrate.rocrate import ROCrate

@@ -1,13 +1,13 @@
 import os
 import uuid
 import typer
-import cr8tor.core.schema as schemas
+import cr8tor.airlock.schema as schemas
 
 from pathlib import Path
 from typing import Annotated
 from datetime import datetime
-import cr8tor.core.resourceops as project_resources
-import cr8tor.core.crate_graph as proj_graph
+import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.crate_graph as proj_graph
 import cr8tor.cli.utils as cli_utils
 
 app = typer.Typer()

@@ -18,10 +18,16 @@ dependencies = [
     "debugpy>=1.5.1",
     "dotenv>=0.9.9",
     "gitpython>=3.1.24",
+    "kopf>=1.38.0",
+    "kubernetes>=33.1.0",
+    "jinja2>=3.1.5",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.3",
+    "python-keycloak>=5.8.1",
 ]
 
 [project.scripts]
-cr8tor = "cr8tor.main:app"
+cr8tor = "cr8tor.main:main"
 
 [build-system]
 requires = ["hatchling"]

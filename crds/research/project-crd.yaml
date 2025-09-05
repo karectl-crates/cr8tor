@@ -1,0 +1,61 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: projects.research.karectl.io
+spec:
+  group: research.karectl.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                description: 
+                  type: string
+                apps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: 
+                        type: string
+                      type: 
+                        type: string
+                      url: 
+                        type: string
+                      osType:
+                        type: string
+                        enum: ["linux", "windows"]
+                      config:
+                        type: object
+                        additionalProperties: true
+                profiles:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      display_name:
+                        type: string
+                      description:
+                        type: string
+                      slug:
+                        type: string
+                      kubespawner_override:
+                        type: object
+                        properties:
+                          image:
+                            type: string
+                          env:
+                            type: object
+                            additionalProperties: true
+  scope: Namespaced
+  names:
+    plural: projects
+    singular: project
+    kind: Project
+    shortNames: [prj]

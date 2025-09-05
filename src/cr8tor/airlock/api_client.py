@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional, Union, Literal, Any, Dict
 from dotenv import load_dotenv, find_dotenv
 import json
-from cr8tor.core.schema import (
+from cr8tor.airlock.schema import (
     DataContractPublishRequest,
     DataContractValidateRequest,
     DataContractTransferRequest,
@@ -22,7 +22,8 @@ class HTTPResponse(BaseModel, frozen=True):
 
 class SuccessResponse(BaseModel):
     # status: Literal["success"]
-    # payload: dict
+    payload: dict
+
     class Config:
         extra = "allow"
 

@@ -1,7 +1,7 @@
 import typer
-import cr8tor.core.schema as schemas
+import cr8tor.airlock.schema as schemas
 import cr8tor.cli.build as ro_crate_builder
-import cr8tor.core.resourceops as project_resources
+import cr8tor.airlock.resourceops as project_resources
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
