@@ -1,19 +1,8 @@
 {
-    "folders": [
-        {
-            "path": "."
-        },
-        {
-            "path": "../cr8-cookiecutter"
-        },
-        {
-            "path": "../cr8-example-project"
-        },
-        {
-            "path": "../cr8-example-project-azure-test"
-        },
-        {
-            "path": "../cr8-example-project-azure-prod"
-        }
-    ]
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
 }

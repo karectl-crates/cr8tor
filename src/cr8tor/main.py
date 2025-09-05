@@ -37,7 +37,7 @@ def cleanup_fn(**kwargs):
     logger.info("Cr8tor Operator is shutting down.")
 
 
-if __name__ == "__main__":
+def main():
     try:
         kopf.run()
     except KeyboardInterrupt:
@@ -45,3 +45,7 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Operator failed: {e}")
         raise
+
+
+if __name__ == "__main__":
+    main()
