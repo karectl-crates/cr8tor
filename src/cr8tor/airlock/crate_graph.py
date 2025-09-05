@@ -2,7 +2,7 @@ from rdflib import Graph
 from rdflib.query import Result
 import sys
 from pathlib import Path
-import cr8tor.core.schema as schemas
+import cr8tor.airlock.schema as schemas
 
 
 class ROCrateGraph:
