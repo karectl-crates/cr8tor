@@ -19,7 +19,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: karectl/cr8tor-operator
+  IMAGE_NAME: karectl-crates/cr8tor-operator
 
 jobs:
   build:
@@ -68,15 +68,21 @@ jobs:
         tags: |
           type=ref,event=branch
           type=ref,event=pr
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=sha,prefix={{branch}}-
+          type=sha,format=short,prefix=branch-,event=branch
+          type=sha,format=short,prefix=pr-,event=pr
+
+    - name: Set latest tag on default branch
+      if: github.ref == 'refs/heads/main'
+      run: echo "LATEST_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_ENV
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
+        tags: |
+          ${{ steps.meta.outputs.tags }}
+          ${{ env.LATEST_TAG }}
         labels: ${{ steps.meta.outputs.labels }}
 
     - name: Summary
