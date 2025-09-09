@@ -10,6 +10,7 @@ resources:
   - service-account.yaml
   - rbac.yaml
   - deployment.yaml
+  - configmaps.yaml
 
 commonLabels:
   app.kubernetes.io/name: cr8tor-operator
