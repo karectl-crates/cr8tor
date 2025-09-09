@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
-cr8tor = "cr8tor.main:main"
+cr8tor = "cr8tor.cli:app"
 
 [build-system]
 requires = ["hatchling"]

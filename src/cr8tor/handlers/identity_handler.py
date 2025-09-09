@@ -1,10 +1,10 @@
 """Module that provides the identity handler for the operator."""
 
 import kopf
-from .user_manager import sync_keycloak_user, delete_keycloak_user
-from .group_manager import sync_keycloak_group, delete_keycloak_group
-from .client_manager import sync_keycloak_client, delete_keycloak_client
-from .client import ensure_realm_exists
+from cr8tor.services.user_manager import sync_keycloak_user, delete_keycloak_user
+from cr8tor.services.group_manager import sync_keycloak_group, delete_keycloak_group
+from cr8tor.services.client_manager import sync_keycloak_client, delete_keycloak_client
+from cr8tor.services.client import ensure_realm_exists
 
 
 # https://www.reddit.com/r/kubernetes/comments/1dge5qk/writing_an_operator_with_kopf/

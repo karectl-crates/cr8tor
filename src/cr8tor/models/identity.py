@@ -1,0 +1,69 @@
+"""Identity-related CRD models."""
+
+from pydantic import Field
+from typing import List, Optional, Dict, Any
+from cr8tor.crd.registry import CRDRegistry
+from cr8tor.crd.base import CRDSpec
+
+
+@CRDRegistry.register("identity.karectl.io", "v1alpha1", "User", "users")
+class UserSpec(CRDSpec):
+    """User CRD specification."""
+
+    username: str = Field(..., description="Unique username for the user")
+    email: str = Field(..., description="Email address of the user")
+    enabled: bool = Field(default=True, description="Whether the user is enabled")
+    groups: List[str] = Field(
+        default_factory=list, description="List of groups the user belongs to"
+    )
+    keycloak: Optional[Dict[str, Any]] = Field(
+        default=None, description="Keycloak-specific configuration"
+    )
+    jupyterhub: Optional[Dict[str, Any]] = Field(
+        default=None, description="JupyterHub-specific configuration"
+    )
+    karectl: Optional[Dict[str, Any]] = Field(
+        default=None, description="Karectl-specific configuration"
+    )
+
+
+@CRDRegistry.register("identity.karectl.io", "v1alpha1", "Group", "groups")
+class GroupSpec(CRDSpec):
+    """Group CRD specification."""
+
+    name: str = Field(..., description="Group name")
+    description: Optional[str] = Field(
+        default=None, description="Human-readable description of the group"
+    )
+    attributes: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional attributes for the group"
+    )
+    members: List[str] = Field(
+        default_factory=list,
+        description="List of usernames that are members of this group",
+    )
+
+
+@CRDRegistry.register(
+    "identity.karectl.io", "v1alpha1", "KeycloakClient", "keycloakclients"
+)
+class KeycloakClientSpec(CRDSpec):
+    """Keycloak Client CRD specification."""
+
+    clientId: str = Field(..., description="Unique client identifier")
+    enabled: bool = Field(default=True, description="Whether the client is enabled")
+    publicClient: bool = Field(
+        default=False, description="Whether this is a public client"
+    )
+    redirectUris: List[str] = Field(
+        default_factory=list, description="Valid redirect URIs for the client"
+    )
+    webOrigins: List[str] = Field(
+        default_factory=list, description="Valid web origins for CORS"
+    )
+    protocol: str = Field(
+        default="openid-connect", description="Authentication protocol"
+    )
+    attributes: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional client attributes"
+    )
