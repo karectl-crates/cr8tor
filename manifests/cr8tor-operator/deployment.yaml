@@ -38,6 +38,31 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-credentials
+                  key: username
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin-credentials
+                  key: password
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: k8tre-realm-config
+                  key: realm-name
+            - name: KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: k8tre-realm-config
+                  key: keycloak-url
+            - name: KEYCLOAK_VERIFY_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: k8tre-realm-config
+                  key: keycloak-verify-tls
 
           resources:
             requests:

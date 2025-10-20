@@ -67,3 +67,49 @@ class KeycloakClientSpec(CRDSpec):
     attributes: Dict[str, Any] = Field(
         default_factory=dict, description="Additional client attributes"
     )
+
+class AppConfig(CRDSpec):
+    """Application configuration within a project."""
+
+    name: str = Field(..., description="Application name")
+    type: str = Field(..., description="Application type (e.g., jupyterhub, vdi)")
+    url: str = Field(..., description="URL endpoint for the application")
+    config: Dict[str, Any] = Field(
+        default_factory=dict, description="Application-specific configuration"
+    )
+
+class ProfileKubespawnerOverride(CRDSpec):
+    """Kubespawner override configuration for profiles."""
+
+    image: Optional[str] = Field(
+        default=None, description="Container image for the profile"
+    )
+    env: Dict[str, Any] = Field(
+        default_factory=dict, description="Environment variables for the profile"
+    )
+
+class ProfileConfig(CRDSpec):
+    """Profile configuration for workspaces."""
+
+    display_name: str = Field(..., description="Human-readable profile name")
+    description: Optional[str] = Field(
+        default=None, description="Profile description"
+    )
+    slug: str = Field(..., description="URL-safe profile identifier")
+    kubespawner_override: Optional[ProfileKubespawnerOverride] = Field(
+        default=None, description="Kubespawner-specific overrides"
+    )
+
+@CRDRegistry.register("research.karectl.io", "v1alpha1", "Project", "projects")
+class ProjectSpec(CRDSpec):
+    """Project CRD specification for research projects."""
+
+    description: str = Field(..., description="Human-readable project description")
+    apps: List[AppConfig] = Field(
+        default_factory=list,
+        description="List of applications available in this project",
+    )
+    profiles: List[ProfileConfig] = Field(
+        default_factory=list,
+        description="List of workspace profiles for this project",
+    )

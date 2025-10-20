@@ -53,7 +53,10 @@ class PluginRegistry:
 
     def _load_builtin_plugins(self):
         """Load built-in plugins from cr8tor.plugins package."""
-        builtin_plugins = ["cr8tor.plugins.identity", "cr8tor.plugins.workspaces"]
+        builtin_plugins = [
+            "cr8tor.plugins.identity",
+            "cr8tor.plugins.workspaces",
+        ]
 
         loaded_count = 0
         for plugin_module in builtin_plugins:

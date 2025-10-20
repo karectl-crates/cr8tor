@@ -1,14 +1,14 @@
-"""Identity management plugin for cr8tor operator."""
+""" Identity management plugin for cr8tor operator.
+"""
 
 import logging
-
 from .base import PluginBase
 
 logger = logging.getLogger(__name__)
 
 
 class IdentityPlugin(PluginBase):
-    """Plugin for managing identity-related CRDs (Users, Groups, KeycloakClients)."""
+    """Plugin for managing identity-related CRDs (Users, Groups, KeycloakClients, Projects)."""
 
     @property
     def name(self):
@@ -20,16 +20,21 @@ class IdentityPlugin(PluginBase):
 
     @property
     def description(self):
-        return "Manages Keycloak users, groups, and clients through Kubernetes CRDs"
+        return "Manages identity, access, and project resources through Kubernetes CRDs"
 
     @property
     def models(self):
-        from cr8tor.models.identity import UserSpec, GroupSpec, KeycloakClientSpec
+        from cr8tor.models.identity import (
+            UserSpec,
+            GroupSpec,
+            KeycloakClientSpec,
+            ProjectSpec,
+        )
 
-        return [UserSpec, GroupSpec, KeycloakClientSpec]
+        return [UserSpec, GroupSpec, KeycloakClientSpec, ProjectSpec]
 
     def _initialise_plugin(self):
-        """initialise identity-specific resources."""
+        """Initialise identity-specific resources."""
         logger.info("Initializing identity plugin...")
 
         # Ensure Keycloak realm exists
@@ -45,8 +50,8 @@ class IdentityPlugin(PluginBase):
         """Register kopf handlers for identity CRDs."""
         logger.info("Registering identity handlers...")
 
-        # Import handlers to trigger decorator registration
         try:
+            from cr8tor.handlers import identity_handler
             logger.info("Identity handlers registered successfully")
         except Exception as e:
             logger.error(f"Failed to register identity handlers: {e}")

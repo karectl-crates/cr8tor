@@ -1,13 +1,3 @@
-# Keycloak realm configuration
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: k8tre-realm-config
-  namespace: cr8tor-system
-data:
-  realm-name: karectl-app
-  realm-display-name: Karectl Application Realm
----
 # VDI pod templates
 apiVersion: v1
 kind: ConfigMap

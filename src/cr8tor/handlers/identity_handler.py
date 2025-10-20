@@ -64,3 +64,32 @@ def client_delete(body, spec, meta, **kwargs):
     kopf.info(
         meta, reason="ClientDeleted", message=f"Keycloak client {client_id} deleted."
     )
+
+@kopf.on.create("research.karectl.io", "v1alpha1", "project")
+@kopf.on.update("research.karectl.io", "v1alpha1", "project")
+def project_create_update(body, spec, meta, **kwargs):
+    """Handle Project resource creation and updates."""
+    project_name = meta["name"]
+
+    description = spec.get("description", "")
+    apps = spec.get("apps", [])
+    profiles = spec.get("profiles", [])
+
+    kopf.info(
+        meta,
+        reason="ProjectSynced",
+        message=f"Project {project_name} validated ({len(apps)} apps, {len(profiles)} profiles)",
+    )
+
+
+@kopf.on.delete("research.karectl.io", "v1alpha1", "project")
+def project_delete(body, spec, meta, **kwargs):
+    """Handle Project resource deletion.
+    """
+    project_name = meta["name"]
+
+    kopf.info(
+        meta,
+        reason="ProjectDeleted",
+        message=f"Project {project_name} cleanup completed (validation only for now)",
+    )
