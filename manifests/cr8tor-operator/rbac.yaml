@@ -50,4 +50,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: cr8tor-operator
-    namespace: cr8tor-system  # Will be replaced by kustomize
+    namespace: cr8tor
