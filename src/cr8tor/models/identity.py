@@ -31,9 +31,8 @@ class UserSpec(CRDSpec):
 class GroupSpec(CRDSpec):
     """Group CRD specification."""
 
-    name: str = Field(..., description="Group name")
-    description: Optional[str] = Field(
-        default=None, description="Human-readable description of the group"
+    description: str = Field(
+        default="", description="Human-readable description of the group"
     )
     attributes: Dict[str, Any] = Field(
         default_factory=dict, description="Additional attributes for the group"
@@ -41,6 +40,14 @@ class GroupSpec(CRDSpec):
     members: List[str] = Field(
         default_factory=list,
         description="List of usernames that are members of this group",
+    )
+    projects: List[str] = Field(
+        default_factory=list,
+        description="List of projects that this group has access to",
+    )
+    subgroups: List[str] = Field(
+        default_factory=list,
+        description="List of subgroups belonging to this group",
     )
 
 
