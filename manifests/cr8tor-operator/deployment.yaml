@@ -30,7 +30,7 @@ spec:
             - name: GIT_REPO
               value: "https://github.com/karectl-crates/cr8tor"
             - name: GIT_REF
-              value: "at-cr8tor-as-operator"  # We can update branch name, commit hash, or tag here.
+              value: "at-cr8tor-as-operator"
 
             - name: LOG_LEVEL
               value: "INFO"
@@ -74,6 +74,11 @@ spec:
                   name: k8tre-realm-config
                   key: keycloak-verify-tls
 
+          volumeMounts:
+            - name: vdi-templates
+              mountPath: /app/templates
+              readOnly: true
+
           resources:
             requests:
               cpu: "100m"
@@ -81,3 +86,8 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+
+      volumes:
+        - name: vdi-templates
+          configMap:
+            name: vdi-pod-template
