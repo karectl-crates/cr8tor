@@ -19,7 +19,3 @@ commonLabels:
 
 namePrefix: ""
 namespace: cr8tor
-
-images:
-  - name: ghcr.io/karectl-crates/cr8tor-operator
-    newTag: latest
