@@ -163,6 +163,15 @@ def generate_demo_crds():
                                         "type": "object",
                                         "properties": {
                                             "clientId": {"type": "string"},
+                                            "name": {"type": "string"},
+                                            "secret": {"type": "string"},
+                                            "secretRef": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": {"type": "string"},
+                                                    "key": {"type": "string"},
+                                                },
+                                            },
                                             "enabled": {
                                                 "type": "boolean",
                                                 "default": True,
@@ -183,7 +192,26 @@ def generate_demo_crds():
                                                 "type": "string",
                                                 "default": "openid-connect",
                                             },
+                                            "defaultClientScopes": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
+                                            "optionalClientScopes": {
+                                                "type": "array",
+                                                "items": {"type": "string"},
+                                            },
+                                            "protocolMappers": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": True,
+                                                },
+                                            },
                                             "attributes": {
+                                                "type": "object",
+                                                "additionalProperties": True,
+                                            },
+                                            "additionalConfig": {
                                                 "type": "object",
                                                 "additionalProperties": True,
                                             },

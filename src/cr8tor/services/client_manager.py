@@ -6,30 +6,48 @@ from .client import get_client
 
 def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
     """Assign client scopes to a client"""
-    try:
-        available_scopes = kc.get_client_scopes()
+    available_scopes = kc.get_client_scopes()
 
-        for scope_name in scope_names:
-            scope_obj = next(
-                (s for s in available_scopes if s["name"] == scope_name), None
-            )
+    success_count = 0
+    failed_scopes = []
 
-            if scope_obj:
+    for scope_name in scope_names:
+        scope_obj = next(
+            (s for s in available_scopes if s["name"] == scope_name), None
+        )
+
+        if scope_obj:
+            try:
                 if scope_type == "default":
                     kc.add_client_default_client_scope(client_uuid, scope_obj["id"])
                 else:
                     kc.add_client_optional_client_scope(client_uuid, scope_obj["id"])
-                print(f"Assigned {scope_type} client scope '{scope_name}' to client")
-            else:
-                print(f"Warning: Client scope '{scope_name}' not found")
-    except Exception as e:
-        print(f"Error assigning client scopes: {e}")
+                print(f"Assigned {scope_type} scope '{scope_name}' to client")
+                success_count += 1
+            except Exception as scope_error:
+                print(f"Error assigning scope '{scope_name}': {scope_error}")
+                failed_scopes.append(scope_name)
+        else:
+            print(f"Warning: Scope '{scope_name}' not found in realm")
+            failed_scopes.append(scope_name)
+
+    print(f"Scope assignment complete: {success_count}/{len(scope_names)} successful")
+    if failed_scopes:
+        print(f"Failed scopes: {failed_scopes}")
 
 
 def create_protocol_mappers(kc, client_uuid, mappers):
     """Create protocol mappers for a client"""
-    try:
-        for mapper in mappers:
+    if not mappers:
+        print("No protocol mappers to configure")
+        return
+
+    print(f"Attempting to configure {len(mappers)} protocol mappers")
+    success_count = 0
+    failed_mappers = []
+
+    for mapper in mappers:
+        try:
             mapper_payload = {
                 "name": mapper["name"],
                 "protocol": mapper.get("protocol", "openid-connect"),
@@ -48,15 +66,22 @@ def create_protocol_mappers(kc, client_uuid, mappers):
                     client_uuid, existing_mapper["id"], mapper_payload
                 )
                 print(f"Updated protocol mapper '{mapper['name']}'")
+                success_count += 1
             else:
                 kc.create_client_protocol_mapper(client_uuid, mapper_payload)
                 print(f"Created protocol mapper '{mapper['name']}'")
+                success_count += 1
 
-    except Exception as e:
-        print(f"Error creating protocol mappers: {e}")
+        except Exception as e:
+            print(f"Error configuring mapper '{mapper.get('name', 'unknown')}': {e}")
+            failed_mappers.append(mapper.get("name", "unknown"))
+
+    print(f"Protocol mapper configuration complete: {success_count}/{len(mappers)} successful")
+    if failed_mappers:
+        print(f"Failed mappers: {failed_mappers}")
 
 
-def sync_keycloak_client(client_id, spec):
+def sync_keycloak_client(client_id, spec, namespace=None):
     kc = get_client()
     clients = kc.get_clients()
     client_obj = next((c for c in clients if c["clientId"] == client_id), None)
@@ -66,14 +91,14 @@ def sync_keycloak_client(client_id, spec):
         try:
             config.load_incluster_config()
             v1 = client.CoreV1Api()
-            namespace = os.environ.get("KUBERNETES_NAMESPACE", "keycloak")
+            secret_namespace = namespace or os.environ.get("KUBERNETES_NAMESPACE", "keycloak")
 
             secret = v1.read_namespaced_secret(
-                name=spec["secretRef"]["name"], namespace=namespace
+                name=spec["secretRef"]["name"], namespace=secret_namespace
             )
             secret_key = spec["secretRef"].get("key", "client-secret")
             secret_value = base64.b64decode(secret.data[secret_key]).decode("utf-8")
-            print(f"Retrieved secret for {client_id} from {spec['secretRef']['name']}")
+            print(f"Retrieved secret for {client_id} from {spec['secretRef']['name']} in namespace {secret_namespace}")
 
         except Exception as e:
             print(f"Error reading secretRef for {client_id}: {e}")
