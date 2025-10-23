@@ -74,11 +74,17 @@ class OpenAPIConverter:
 
         # Handle objects
         if prop_schema.get("type") == "object":
+            if not prop_schema.get("properties"):
+                return {
+                    "type": "object",
+                    "x-kubernetes-preserve-unknown-fields": True
+                }
+
+            # For objects with defined properties, use standard validation
             converted = {"type": "object"}
-            if "properties" in prop_schema:
-                converted["properties"] = OpenAPIConverter._convert_properties(
-                    prop_schema["properties"], defs
-                )
+            converted["properties"] = OpenAPIConverter._convert_properties(
+                prop_schema["properties"], defs
+            )
             if "required" in prop_schema:
                 converted["required"] = prop_schema["required"]
             # Allow additional properties for flexible schemas
