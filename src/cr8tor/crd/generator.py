@@ -207,6 +207,7 @@ class KareCRDManager:
                         "schema": {
                             "openAPIV3Schema": {
                                 "type": "object",
+                                "x-kubernetes-preserve-unknown-fields": True,
                                 "properties": {
                                     "spec": openapi_schema,
                                     "status": {
