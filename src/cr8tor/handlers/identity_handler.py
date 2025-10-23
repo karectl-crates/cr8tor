@@ -49,7 +49,10 @@ def group_delete(body, spec, meta, **kwargs):
 
 @kopf.on.create("identity.karectl.io", "v1alpha1", "keycloakclient")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "keycloakclient")
+@kopf.on.resume("identity.karectl.io", "v1alpha1", "keycloakclient")
 def client_create_update(body, spec, meta, **kwargs):
+    """Handle KeycloakClient create, update, and resume (on operator restart).
+    """
     client_id = spec["clientId"]
     namespace = meta.get("namespace", "keycloak")
     sync_keycloak_client(client_id, spec, namespace=namespace)
