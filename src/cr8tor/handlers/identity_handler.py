@@ -51,7 +51,8 @@ def group_delete(body, spec, meta, **kwargs):
 @kopf.on.update("identity.karectl.io", "v1alpha1", "keycloakclient")
 def client_create_update(body, spec, meta, **kwargs):
     client_id = spec["clientId"]
-    sync_keycloak_client(client_id, spec)
+    namespace = meta.get("namespace", "keycloak")
+    sync_keycloak_client(client_id, spec, namespace=namespace)
     kopf.info(
         meta, reason="ClientSynced", message=f"Keycloak client {client_id} synced."
     )
