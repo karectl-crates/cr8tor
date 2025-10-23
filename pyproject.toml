@@ -24,10 +24,11 @@ dependencies = [
     "pyyaml>=6.0.2",
     "requests>=2.32.3",
     "python-keycloak>=5.8.1",
+    "setuptools>=75.0.0",
 ]
 
 [project.scripts]
-cr8tor = "cr8tor.main:main"
+cr8tor = "cr8tor.cli:app"
 
 [build-system]
 requires = ["hatchling"]

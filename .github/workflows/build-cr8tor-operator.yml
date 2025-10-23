@@ -1,0 +1,93 @@
+name: Build Cr8tor Operator
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'src/cr8tor/**'
+      - 'Dockerfile'
+      - '.github/workflows/build-cr8tor-operator.yml'
+      - 'pyproject.toml'
+  pull_request:
+    paths:
+      - 'src/cr8tor/**'
+      - 'Dockerfile'
+      - '.github/workflows/build-cr8tor-operator.yml'
+      - 'pyproject.toml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: karectl-crates/cr8tor-operator
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies and run tests
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+
+        # Test CRD generation
+        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+        python -c "
+        from cr8tor.crd.generator import KareCRDManager
+        manager = KareCRDManager()
+        success = manager.generate_all_crds(force=True)
+        print(f'CRD generation test: {\"passed\" if success else \"failed\"}')
+        if not success:
+            exit(1)
+        "
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,format=short,prefix=branch-,event=branch
+          type=sha,format=short,prefix=pr-,event=pr
+
+    - name: Set latest tag on default branch
+      if: github.ref == 'refs/heads/main'
+      run: echo "LATEST_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_ENV
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ steps.meta.outputs.tags }}
+          ${{ env.LATEST_TAG }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Summary
+      run: |
+        echo "## Cr8tor Operator Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "**Image:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Tags:** ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Repository:** karectl organization" >> $GITHUB_STEP_SUMMARY

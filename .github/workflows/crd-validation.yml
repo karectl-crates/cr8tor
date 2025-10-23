@@ -1,0 +1,104 @@
+name: CRD Validation
+
+on:
+  pull_request:
+    paths:
+    - 'src/cr8tor/models/**'
+    - 'src/cr8tor/crd/**'
+    - 'src/cr8tor/plugins/**'
+  push:
+    branches:
+    - main
+    paths:
+    - 'src/cr8tor/models/**'
+    - 'src/cr8tor/crd/**'
+    - 'src/cr8tor/plugins/**'
+
+jobs:
+  validate-crds:
+    runs-on: ubuntu-latest
+    name: Validate CRD Generation
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+
+    - name: Generate CRDs
+      run: |
+        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+        python -c "
+        from cr8tor.crd.generator import KareCRDManager
+        manager = KareCRDManager()
+        success = manager.generate_all_crds(force=True)
+        print(f'CRD generation: {\"successful\" if success else \"no models found\"}')
+        if not success:
+            exit(1)
+        "
+
+    - name: Validate generated CRDs
+      run: |
+        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+        python -c "
+        from cr8tor.crd.generator import KareCRDManager
+        manager = KareCRDManager()
+        if not manager.validate_generated_crds():
+            print('CRD validation failed')
+            exit(1)
+        print('All CRDs are valid')
+        "
+
+    - name: Check for uncommitted CRDs (Optional)
+      run: |
+        # Since CRDs are now generated in-memory by default, we only check if files exist
+        if [ -d "crds/generated" ] && [ "$(ls -A crds/generated/ 2>/dev/null)" ]; then
+          if [[ -n $(git diff --name-only crds/generated/) ]]; then
+            echo "CRD files exist but are not up to date."
+            echo "If you need CRD files, please run:"
+            echo "  cr8tor generate-crds --force"
+            echo "  git add crds/generated/"
+            echo ""
+            echo "Changed files:"
+            git diff --name-only crds/generated/
+          else
+            echo "Existing CRD files are up to date"
+          fi
+        else
+          echo "No CRD files found (using in-memory generation)"
+        fi
+
+    - name: Test in-memory CRD generation
+      run: |
+        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
+        python -c "
+        from cr8tor.crd.generator import KareCRDManager
+        manager = KareCRDManager()
+        crds = manager.get_crds_as_dict()
+        print(f'Generated {len(crds)} CRDs in memory')
+        for crd_name in crds.keys():
+            print(f'  - {crd_name}')
+        if len(crds) == 0:
+            print('No CRDs found, but this is acceptable for in-memory mode')
+        "
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "## CRD Validation Summary" >> $GITHUB_STEP_SUMMARY
+        if [ -d "crds/generated" ]; then
+          crd_count=$(find crds/generated -name "*.yaml" -not -name "kustomization.yaml" | wc -l)
+          echo "**Generated CRDs:** $crd_count" >> $GITHUB_STEP_SUMMARY
+          echo "**Files:**" >> $GITHUB_STEP_SUMMARY
+          find crds/generated -name "*.yaml" -not -name "kustomization.yaml" -exec basename {} \; | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "**Generated CRDs:** 0" >> $GITHUB_STEP_SUMMARY
+        fi

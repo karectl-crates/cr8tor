@@ -35,4 +35,4 @@ COPY --from=builder --chown=appuser:appuser /app/.venv .venv
 USER appuser
 
 # Run the application
-CMD ["/app/.venv/bin/cr8tor"]
+CMD ["/app/.venv/bin/cr8tor", "operator"]

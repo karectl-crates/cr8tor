@@ -18,9 +18,9 @@ jobs:
     strategy:
       matrix:
         operator:
-          - name: identity-operator
-            path: operators/identity-operator
-            image: alwin-k-thomas/identity-operator
+          - name: cr8tor-operator
+            path: .
+            image: karectl-crates/cr8tor-operator
 
     steps:
     - name: Checkout repository
