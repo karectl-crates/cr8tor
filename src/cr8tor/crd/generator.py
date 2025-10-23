@@ -52,6 +52,17 @@ class OpenAPIConverter:
                 if def_name in defs:
                     return OpenAPIConverter._convert_property(defs[def_name], defs)
 
+        # Handle anyOf (Optional fields)
+        if "anyOf" in prop_schema:
+            for option in prop_schema.get("anyOf", []):
+                if option.get("type") != "null":
+                    result = OpenAPIConverter._convert_property(option, defs)
+                    if "description" in prop_schema and "description" not in result:
+                        result["description"] = prop_schema["description"]
+                    return result
+            # If all options are null, treat as string
+            return {"type": "string"}
+
         # Handle arrays
         if prop_schema.get("type") == "array":
             converted = {"type": "array"}
