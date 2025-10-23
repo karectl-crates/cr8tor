@@ -83,6 +83,9 @@ class OpenAPIConverter:
                 converted["required"] = prop_schema["required"]
             # Allow additional properties for flexible schemas
             converted["additionalProperties"] = True
+            # Preserve unknown fields
+            if not prop_schema.get("properties"):
+                converted["x-kubernetes-preserve-unknown-fields"] = True
             return converted
 
         # Handle basic types
