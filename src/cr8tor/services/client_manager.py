@@ -7,6 +7,7 @@ from .client import get_client
 def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
     """Assign client scopes to a client"""
     available_scopes = kc.get_client_scopes()
+    realm_name = kc.connection.realm_name
 
     success_count = 0
     failed_scopes = []
@@ -18,10 +19,15 @@ def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
 
         if scope_obj:
             try:
+                payload = {
+                    "realm": realm_name,
+                    "client": client_uuid,
+                    "clientScopeId": scope_obj["id"]
+                }
                 if scope_type == "default":
-                    kc.add_client_default_client_scope(client_uuid, scope_obj["id"])
+                    kc.add_client_default_client_scope(client_uuid, scope_obj["id"], payload)
                 else:
-                    kc.add_client_optional_client_scope(client_uuid, scope_obj["id"])
+                    kc.add_client_optional_client_scope(client_uuid, scope_obj["id"], payload)
                 print(f"Assigned {scope_type} scope '{scope_name}' to client")
                 success_count += 1
             except Exception as scope_error:
@@ -56,21 +62,18 @@ def create_protocol_mappers(kc, client_uuid, mappers):
                 "config": mapper.get("config", {}),
             }
 
-            existing_mappers = kc.get_client_protocol_mappers(client_uuid)
-            existing_mapper = next(
-                (m for m in existing_mappers if m["name"] == mapper["name"]), None
-            )
-
-            if existing_mapper:
-                kc.update_client_protocol_mapper(
-                    client_uuid, existing_mapper["id"], mapper_payload
-                )
-                print(f"Updated protocol mapper '{mapper['name']}'")
-                success_count += 1
-            else:
-                kc.create_client_protocol_mapper(client_uuid, mapper_payload)
+            try:
+                result = kc.add_mapper_to_client(client_uuid, mapper_payload)
                 print(f"Created protocol mapper '{mapper['name']}'")
                 success_count += 1
+            except Exception as create_error:
+                error_msg = str(create_error)
+                if "already exists" in error_msg.lower() or "conflict" in error_msg.lower():
+                    print(f"Protocol mapper '{mapper['name']}' already exists")
+                    success_count += 1
+                else:
+                    print(f"Error creating mapper '{mapper['name']}': {create_error}")
+                    failed_mappers.append(mapper.get("name", "unknown"))
 
         except Exception as e:
             print(f"Error configuring mapper '{mapper.get('name', 'unknown')}': {e}")
