@@ -58,6 +58,15 @@ class KeycloakClientSpec(CRDSpec):
     """Keycloak Client CRD specification."""
 
     clientId: str = Field(..., description="Unique client identifier")
+    name: Optional[str] = Field(default=None, description="Human-readable client name")
+    secret: Optional[str] = Field(
+        default=None,
+        description="Client secret"
+    )
+    secretRef: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Reference to Kubernetes secret containing client secret",
+    )
     enabled: bool = Field(default=True, description="Whether the client is enabled")
     publicClient: bool = Field(
         default=False, description="Whether this is a public client"
@@ -71,8 +80,24 @@ class KeycloakClientSpec(CRDSpec):
     protocol: str = Field(
         default="openid-connect", description="Authentication protocol"
     )
+    defaultClientScopes: List[str] = Field(
+        default_factory=list,
+        description="List of default client scopes (openid, profile, email, groups)",
+    )
+    optionalClientScopes: List[str] = Field(
+        default_factory=list,
+        description="List of optional client scopes",
+    )
+    protocolMappers: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Protocol mappers configuration (audience mapper, group mapper)",
+    )
     attributes: Dict[str, Any] = Field(
         default_factory=dict, description="Additional client attributes"
+    )
+    additionalConfig: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional Keycloak client configuration",
     )
 
 class AppConfig(CRDSpec):

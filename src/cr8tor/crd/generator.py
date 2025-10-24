@@ -52,6 +52,17 @@ class OpenAPIConverter:
                 if def_name in defs:
                     return OpenAPIConverter._convert_property(defs[def_name], defs)
 
+        # Handle anyOf (Optional fields)
+        if "anyOf" in prop_schema:
+            for option in prop_schema.get("anyOf", []):
+                if option.get("type") != "null":
+                    result = OpenAPIConverter._convert_property(option, defs)
+                    if "description" in prop_schema and "description" not in result:
+                        result["description"] = prop_schema["description"]
+                    return result
+            # If all options are null, treat as string
+            return {"type": "string"}
+
         # Handle arrays
         if prop_schema.get("type") == "array":
             converted = {"type": "array"}
@@ -63,11 +74,17 @@ class OpenAPIConverter:
 
         # Handle objects
         if prop_schema.get("type") == "object":
+            if not prop_schema.get("properties"):
+                return {
+                    "type": "object",
+                    "x-kubernetes-preserve-unknown-fields": True
+                }
+
+            # For objects with defined properties, use standard validation
             converted = {"type": "object"}
-            if "properties" in prop_schema:
-                converted["properties"] = OpenAPIConverter._convert_properties(
-                    prop_schema["properties"], defs
-                )
+            converted["properties"] = OpenAPIConverter._convert_properties(
+                prop_schema["properties"], defs
+            )
             if "required" in prop_schema:
                 converted["required"] = prop_schema["required"]
             # Allow additional properties for flexible schemas
