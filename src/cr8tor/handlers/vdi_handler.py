@@ -46,31 +46,46 @@ def ensure_init_scripts_configmap(namespace):
     """ Ensure vdi-init-scripts exists in the target namespace.
     """
     api = kubernetes.client.CoreV1Api()
-    try:
-        api.read_namespaced_config_map(name="vdi-init-scripts", namespace=namespace)
-        print(f"vdi-init-scripts already exists in {namespace}", flush=True)
-        return
-    except ApiException as e:
-        if e.status != 404:
-            raise
 
-    # Read the ConfigMap from the operator's namespace (cr8tor)
+    # Read the source ConfigMap from cr8tor namespace
     try:
         source_cm = api.read_namespaced_config_map(name="vdi-init-scripts", namespace="cr8tor")
-        new_cm = kubernetes.client.V1ConfigMap(
-            metadata=kubernetes.client.V1ObjectMeta(
+    except ApiException as e:
+        print(f"Failed to read source vdi-init-scripts from cr8tor: {e}", flush=True)
+        raise
+
+    # Check if ConfigMap exists in target namespace
+    try:
+        existing_cm = api.read_namespaced_config_map(name="vdi-init-scripts", namespace=namespace)
+
+        # Update if data is different
+        if existing_cm.data != source_cm.data:
+            existing_cm.data = source_cm.data
+            api.replace_namespaced_config_map(
                 name="vdi-init-scripts",
                 namespace=namespace,
-                labels={"managed-by": "cr8tor-operator"}
-            ),
-            data=source_cm.data
-        )
+                body=existing_cm
+            )
+            print(f"Updated vdi-init-scripts in {namespace}", flush=True)
+        else:
+            print(f"vdi-init-scripts already up-to-date in {namespace}", flush=True)
 
-        api.create_namespaced_config_map(namespace=namespace, body=new_cm)
-        print(f"Created vdi-init-scripts in {namespace}", flush=True)
     except ApiException as e:
-        print(f"Failed to copy vdi-init-scripts: {e}", flush=True)
-        raise
+        if e.status == 404:
+            # Create new ConfigMap
+            new_cm = kubernetes.client.V1ConfigMap(
+                metadata=kubernetes.client.V1ObjectMeta(
+                    name="vdi-init-scripts",
+                    namespace=namespace,
+                    labels={"managed-by": "cr8tor-operator"}
+                ),
+                data=source_cm.data
+            )
+            api.create_namespaced_config_map(namespace=namespace, body=new_cm)
+            print(f"Created vdi-init-scripts in {namespace}", flush=True)
+        else:
+            print(f"Failed to check/update vdi-init-scripts: {e}", flush=True)
+            raise
 
 
 def render_pod_template(

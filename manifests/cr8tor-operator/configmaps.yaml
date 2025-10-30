@@ -253,14 +253,19 @@ data:
         echo "Created shortcut: ${name}"
     }
 
-    # Create URL
-    create_authenticated_url() {
-        local base_url="$1"
-        local path="$2"
-
-        # Passing project parameter
-        echo "${base_url}${path}?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}"
-    }
+    # Create Firefox desktop shortcut
+    cat > "${DESKTOP_DIR}/firefox.desktop" <<EOF
+    [Desktop Entry]
+    Version=1.0
+    Type=Application
+    Name=Firefox Browser
+    Comment=Browse the Web
+    Exec=firefox
+    Icon=firefox
+    Terminal=false
+    Categories=Network;WebBrowser;
+    EOF
+    chmod +x "${DESKTOP_DIR}/firefox.desktop"
 
     if [ -n "${KARECTL_TOKEN}" ]; then
         SSO_URL="https://backend.${ENVIRONMENT}.${DOMAIN}/auth/sso?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}&app=jupyter"
@@ -272,31 +277,44 @@ data:
             "jupyterhub.desktop"
     fi
 
-    # Backend project portal
-    BACKEND_URL="https://backend.${ENVIRONMENT}.${DOMAIN}"
-    create_desktop_shortcut \
-        "Project Portal" \
-        "${BACKEND_URL}" \
-        "applications-internet" \
-        "backend.desktop"
+    # Configure MATE desktop settings
+    mkdir -p /home/ubuntu/.config/dconf
 
-    # Set Firefox preferences to trust the domain
+    # Reset MATE panel to defaults
+    dconf reset -f /org/mate/panel/ 2>/dev/null || true
+    cat > /home/ubuntu/.config/dconf/user.conf <<EOF
+    [org/mate/screensaver]
+    idle-activation-enabled=false
+    lock-enabled=false
+
+    [org/mate/power-manager]
+    sleep-display-ac=0
+    sleep-display-battery=0
+    button-lid-ac='nothing'
+    button-lid-battery='nothing'
+    EOF
+
+    # Set Firefox preferences
     FIREFOX_PROFILE_DIR="/home/ubuntu/.mozilla/firefox"
     mkdir -p "${FIREFOX_PROFILE_DIR}"
 
-    # Create a user.js file with preferences
+    # Create user.js with preferences
     cat > "/home/ubuntu/user-prefs.js" <<EOF
     // Auto-generated Firefox preferences for VDI
-    user_pref("browser.startup.homepage", "https://backend.${ENVIRONMENT}.${DOMAIN}");
+    user_pref("browser.startup.homepage", "about:blank");
+    user_pref("browser.startup.page", 0);
     user_pref("browser.shell.checkDefaultBrowser", false);
     user_pref("datareporting.healthreport.uploadEnabled", false);
     user_pref("datareporting.policy.dataSubmissionEnabled", false);
     user_pref("toolkit.telemetry.enabled", false);
+    user_pref("browser.tabs.warnOnClose", false);
+    user_pref("browser.sessionstore.resume_from_crash", false);
     EOF
 
     # Set ownership
     chown -R ubuntu:ubuntu /home/ubuntu/Desktop || true
     chown -R ubuntu:ubuntu /home/ubuntu/.mozilla 2>/dev/null || true
+    chown -R ubuntu:ubuntu /home/ubuntu/.config 2>/dev/null || true
 
     echo "====== Setup Complete ======"
     echo ""
