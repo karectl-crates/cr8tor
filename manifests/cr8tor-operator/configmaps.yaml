@@ -33,6 +33,8 @@ data:
               value: "{{ user }}"
             - name: KARECTL_PROJECT
               value: "{{ project }}"
+            - name: VDI_LINUX_USER
+              value: "{{ linux_user }}"
             - name: KARECTL_ENVIRONMENT
               value: "{{ env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) }}"
             - name: KARECTL_DOMAIN
@@ -199,6 +201,8 @@ data:
     echo "Starting VDI Desktop Setup"
     echo "User: ${KARECTL_USER}"
     echo "Project: ${KARECTL_PROJECT}"
+    LINUX_USER="${VDI_LINUX_USER:-ubuntu}"
+    echo "Using Linux user: ${LINUX_USER}"
 
     if [ -n "${KARECTL_ENVIRONMENT}" ] && [ -n "${KARECTL_DOMAIN}" ]; then
         ENVIRONMENT="${KARECTL_ENVIRONMENT}"
@@ -227,7 +231,7 @@ data:
 
     echo "Environment: ${ENVIRONMENT}"
     echo "Domain: ${DOMAIN}"
-    DESKTOP_DIR="/home/ubuntu/Desktop"
+    DESKTOP_DIR="/home/${LINUX_USER}/Desktop"
     mkdir -p "${DESKTOP_DIR}"
 
     # Create .desktop file
@@ -278,11 +282,11 @@ data:
     fi
 
     # Configure MATE desktop settings
-    mkdir -p /home/ubuntu/.config/dconf
+    mkdir -p /home/${LINUX_USER}/.config/dconf
 
     # Reset MATE panel to defaults
     dconf reset -f /org/mate/panel/ 2>/dev/null || true
-    cat > /home/ubuntu/.config/dconf/user.conf <<EOF
+    cat > /home/${LINUX_USER}/.config/dconf/user.conf <<EOF
     [org/mate/screensaver]
     idle-activation-enabled=false
     lock-enabled=false
@@ -295,11 +299,11 @@ data:
     EOF
 
     # Set Firefox preferences
-    FIREFOX_PROFILE_DIR="/home/ubuntu/.mozilla/firefox"
+    FIREFOX_PROFILE_DIR="/home/${LINUX_USER}/.mozilla/firefox"
     mkdir -p "${FIREFOX_PROFILE_DIR}"
 
     # Create user.js with preferences
-    cat > "/home/ubuntu/user-prefs.js" <<EOF
+    cat > "/home/${LINUX_USER}/user-prefs.js" <<EOF
     // Auto-generated Firefox preferences for VDI
     user_pref("browser.startup.homepage", "about:blank");
     user_pref("browser.startup.page", 0);
@@ -312,9 +316,9 @@ data:
     EOF
 
     # Set ownership
-    chown -R ubuntu:ubuntu /home/ubuntu/Desktop || true
-    chown -R ubuntu:ubuntu /home/ubuntu/.mozilla 2>/dev/null || true
-    chown -R ubuntu:ubuntu /home/ubuntu/.config 2>/dev/null || true
+    chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/Desktop || true
+    chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/.mozilla 2>/dev/null || true
+    chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/.config 2>/dev/null || true
 
     echo "====== Setup Complete ======"
     echo ""
