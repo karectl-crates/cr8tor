@@ -89,7 +89,7 @@ def ensure_init_scripts_configmap(namespace):
 
 
 def render_pod_template(
-    name, namespace, user, project, image, connection, password, env_vars=None
+    name, namespace, user, project, image, connection, password, linux_user, env_vars=None
 ):
     if env_vars is None:
         env_vars = []
@@ -108,6 +108,7 @@ def render_pod_template(
         image=image,
         password=password,
         connection=connection,
+        linux_user=linux_user,
         env_vars=env_vars,
     )
 
@@ -115,6 +116,7 @@ def render_pod_template(
 @kopf.on.create("karectl.io", "v1alpha1", "vdiinstances")
 def create_vdi(spec, name, namespace, patch, body, **kwargs):
     from secrets import token_urlsafe
+    import re
 
     patch.status["phase"] = "Pending"
     ensure_init_scripts_configmap(namespace)
@@ -129,20 +131,34 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
     print(f"Full spec: {spec}", flush=True)
     print(f"Environment variables from spec: {env_vars}", flush=True)
 
+    # Generate unique linux username for isolation
+    safe_user = re.sub(r'[^a-z0-9_-]', '', user.lower())
+    safe_project = re.sub(r'[^a-z0-9_-]', '', project.lower())
+    linux_user = f"vdx-{safe_user}-{safe_project}"
+
+    # linux usernames have max length of 32 characters
+    if len(linux_user) > 32:
+        linux_user = linux_user[:32]
+        print(f"Warning: Linux username truncated to 32 chars: {linux_user}", flush=True)
+
+    print(f"Generated Linux username: {linux_user} for Karectl user: {user}, project: {project}", flush=True)
+
     # Generate and store password in CRD status
     status = body.get("status", {})
     if "password" not in status or not status["password"]:
         generated_password = token_urlsafe(24)
         patch.status["password"] = generated_password
+        patch.status["linuxUser"] = linux_user
         print(f"Generated VDI password for {name}", flush=True)
     else:
         generated_password = status["password"]
         print(f"Using existing VDI password for {name}", flush=True)
+        patch.status["linuxUser"] = linux_user
 
     print(f"About to patch status: {dict(patch.status)}", flush=True)
 
     pod_yaml = render_pod_template(
-        name, namespace, user, project, image, connection, generated_password, env_vars
+        name, namespace, user, project, image, connection, generated_password, linux_user, env_vars
     )
 
     resources = list(yaml.safe_load_all(pod_yaml))
