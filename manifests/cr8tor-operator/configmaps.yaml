@@ -3,7 +3,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vdi-pod-template
-  namespace: cr8tor-system
+  namespace: cr8tor
 data:
   vdi-pod-template.yaml.j2: |
     apiVersion: v1
@@ -29,6 +29,14 @@ data:
               value: "{{ user }}"
             - name: VDI_PROJECT
               value: "{{ project }}"
+            - name: KARECTL_USER
+              value: "{{ user }}"
+            - name: KARECTL_PROJECT
+              value: "{{ project }}"
+            - name: KARECTL_ENVIRONMENT
+              value: "{{ env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) }}"
+            - name: KARECTL_DOMAIN
+              value: "{{ env_vars | selectattr('name', 'equalto', 'KARECTL_DOMAIN') | map(attribute='value') | first | default('karectl.org', true) }}"
             {% if env_vars %}
             {% for env_var in env_vars %}
             - name: {{ env_var.name }}
@@ -38,12 +46,32 @@ data:
           ports:
             - containerPort: 3389
             - containerPort: 5900
+          readinessProbe:
+            tcpSocket:
+              port: 3389
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+            successThreshold: 1
+            failureThreshold: 3
           volumeMounts:
             - name: home
               mountPath: /home/ubuntu
+            - name: init-scripts
+              mountPath: /scripts
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/bash
+                  - /scripts/init-desktop.sh
       volumes:
         - name: home
           emptyDir: {}
+        - name: init-scripts
+          configMap:
+            name: vdi-init-scripts
+            defaultMode: 0755
       terminationGracePeriodSeconds: 10
     ---
     apiVersion: v1
@@ -156,3 +184,122 @@ data:
         targetPort: 8006
         protocol: TCP
       type: ClusterIP
+---
+# VDI initialization scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vdi-init-scripts
+  namespace: cr8tor
+data:
+  init-desktop.sh: |
+    #!/bin/bash
+    # Script to create desktop shortcuts
+    set -e
+    echo "Starting VDI Desktop Setup"
+    echo "User: ${KARECTL_USER}"
+    echo "Project: ${KARECTL_PROJECT}"
+
+    if [ -n "${KARECTL_ENVIRONMENT}" ] && [ -n "${KARECTL_DOMAIN}" ]; then
+        ENVIRONMENT="${KARECTL_ENVIRONMENT}"
+        DOMAIN="${KARECTL_DOMAIN}"
+        echo "Using explicit environment and domain"
+    elif [ -n "${KARECTL_BACKEND_URL}" ]; then
+        # extract from backend URL
+        if [[ "${KARECTL_BACKEND_URL}" == *".svc.cluster.local"* ]]; then
+            # Internal cluster URL - use defaults
+            ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
+            DOMAIN="${KARECTL_DOMAIN:-cluster.local}"
+            echo "Using internal cluster URL with defaults"
+        else
+            # External URL
+            BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://backend\.||' | sed 's|/.*||')
+            ENVIRONMENT=$(echo "${BACKEND_HOST}" | cut -d. -f1)
+            DOMAIN=$(echo "${BACKEND_HOST}" | cut -d. -f2-)
+            echo "Extracted environment and domain from backend URL"
+        fi
+    else
+        # no explicit values, using defaults
+        ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
+        DOMAIN="${KARECTL_DOMAIN:-localhost}"
+        echo "Using default environment and domain"
+    fi
+
+    echo "Environment: ${ENVIRONMENT}"
+    echo "Domain: ${DOMAIN}"
+    DESKTOP_DIR="/home/ubuntu/Desktop"
+    mkdir -p "${DESKTOP_DIR}"
+
+    # Create .desktop file
+    create_desktop_shortcut() {
+        local name="$1"
+        local url="$2"
+        local icon="$3"
+        local filename="$4"
+
+        cat > "${DESKTOP_DIR}/${filename}" <<EOF
+    [Desktop Entry]
+    Version=1.0
+    Type=Application
+    Name=${name}
+    Comment=Launch ${name} for ${KARECTL_PROJECT} project
+    Exec=firefox --new-window "${url}"
+    Icon=${icon}
+    Terminal=false
+    Categories=Application;Network;
+    EOF
+
+        chmod +x "${DESKTOP_DIR}/${filename}"
+        echo "Created shortcut: ${name}"
+    }
+
+    # Create URL
+    create_authenticated_url() {
+        local base_url="$1"
+        local path="$2"
+
+        # Passing project parameter
+        echo "${base_url}${path}?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}"
+    }
+
+    if [ -n "${KARECTL_TOKEN}" ]; then
+        SSO_URL="https://backend.${ENVIRONMENT}.${DOMAIN}/auth/sso?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}&app=jupyter"
+
+        create_desktop_shortcut \
+            "JupyterHub - ${KARECTL_PROJECT^}" \
+            "${SSO_URL}" \
+            "applications-science" \
+            "jupyterhub.desktop"
+    fi
+
+    # Backend project portal
+    BACKEND_URL="https://backend.${ENVIRONMENT}.${DOMAIN}"
+    create_desktop_shortcut \
+        "Project Portal" \
+        "${BACKEND_URL}" \
+        "applications-internet" \
+        "backend.desktop"
+
+    # Set Firefox preferences to trust the domain
+    FIREFOX_PROFILE_DIR="/home/ubuntu/.mozilla/firefox"
+    mkdir -p "${FIREFOX_PROFILE_DIR}"
+
+    # Create a user.js file with preferences
+    cat > "/home/ubuntu/user-prefs.js" <<EOF
+    // Auto-generated Firefox preferences for VDI
+    user_pref("browser.startup.homepage", "https://backend.${ENVIRONMENT}.${DOMAIN}");
+    user_pref("browser.shell.checkDefaultBrowser", false);
+    user_pref("datareporting.healthreport.uploadEnabled", false);
+    user_pref("datareporting.policy.dataSubmissionEnabled", false);
+    user_pref("toolkit.telemetry.enabled", false);
+    EOF
+
+    # Set ownership
+    chown -R ubuntu:ubuntu /home/ubuntu/Desktop || true
+    chown -R ubuntu:ubuntu /home/ubuntu/.mozilla 2>/dev/null || true
+
+    echo "====== Setup Complete ======"
+    echo ""
+    echo "Available shortcuts:"
+    ls -lh "${DESKTOP_DIR}"/*.desktop 2>/dev/null || echo "No .desktop files found"
+    echo ""

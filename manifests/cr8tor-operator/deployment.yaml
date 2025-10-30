@@ -30,7 +30,7 @@ spec:
             - name: GIT_REPO
               value: "https://github.com/karectl-crates/cr8tor"
             - name: GIT_REF
-              value: "at-cr8tor-as-operator"
+              value: "feature/at-guacamole-iam"
 
             - name: LOG_LEVEL
               value: "INFO"
