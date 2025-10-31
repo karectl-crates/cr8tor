@@ -1,7 +1,24 @@
 import os
+import re
 import base64
 from kubernetes import client, config
 from .client import get_client
+
+
+def expand_env_vars(value):
+    """Expand environment variables in the format ${VAR_NAME}"""
+    if not isinstance(value, str):
+        return value
+
+    def replacer(match):
+        var_name = match.group(1)
+        env_value = os.environ.get(var_name)
+        if env_value is None:
+            print(f"Warning: Environment variable '{var_name}' not found, keeping placeholder")
+            return match.group(0)  # Return original ${VAR_NAME} if not found
+        return env_value
+
+    return re.sub(r'\$\{([^}]+)\}', replacer, value)
 
 
 def assign_client_scopes(kc, client_uuid, scope_names, scope_type="default"):
@@ -126,7 +143,8 @@ def sync_keycloak_client(client_id, spec, namespace=None):
             print(f"Error reading secretRef for {client_id}: {e}")
             secret_value = spec.get("secret")
     elif "secret" in spec:
-        secret_value = spec["secret"]
+        secret_value = expand_env_vars(spec["secret"])
+        print(f"Expanded secret value for {client_id}")
 
     if not secret_value:
         print(f"No secret found for client {client_id}")

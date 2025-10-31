@@ -42,6 +42,52 @@ patch_kopf_filter()
 # kubernetes.config is loaded in main.py
 
 
+def ensure_init_scripts_configmap(namespace):
+    """ Ensure vdi-init-scripts exists in the target namespace.
+    """
+    api = kubernetes.client.CoreV1Api()
+
+    # Read the source ConfigMap from cr8tor namespace
+    try:
+        source_cm = api.read_namespaced_config_map(name="vdi-init-scripts", namespace="cr8tor")
+    except ApiException as e:
+        print(f"Failed to read source vdi-init-scripts from cr8tor: {e}", flush=True)
+        raise
+
+    # Check if ConfigMap exists in target namespace
+    try:
+        existing_cm = api.read_namespaced_config_map(name="vdi-init-scripts", namespace=namespace)
+
+        # Update if data is different
+        if existing_cm.data != source_cm.data:
+            existing_cm.data = source_cm.data
+            api.replace_namespaced_config_map(
+                name="vdi-init-scripts",
+                namespace=namespace,
+                body=existing_cm
+            )
+            print(f"Updated vdi-init-scripts in {namespace}", flush=True)
+        else:
+            print(f"vdi-init-scripts already up-to-date in {namespace}", flush=True)
+
+    except ApiException as e:
+        if e.status == 404:
+            # Create new ConfigMap
+            new_cm = kubernetes.client.V1ConfigMap(
+                metadata=kubernetes.client.V1ObjectMeta(
+                    name="vdi-init-scripts",
+                    namespace=namespace,
+                    labels={"managed-by": "cr8tor-operator"}
+                ),
+                data=source_cm.data
+            )
+            api.create_namespaced_config_map(namespace=namespace, body=new_cm)
+            print(f"Created vdi-init-scripts in {namespace}", flush=True)
+        else:
+            print(f"Failed to check/update vdi-init-scripts: {e}", flush=True)
+            raise
+
+
 def render_pod_template(
     name, namespace, user, project, image, connection, password, env_vars=None
 ):
@@ -68,7 +114,10 @@ def render_pod_template(
 
 @kopf.on.create("karectl.io", "v1alpha1", "vdiinstances")
 def create_vdi(spec, name, namespace, patch, body, **kwargs):
+    from secrets import token_urlsafe
+
     patch.status["phase"] = "Pending"
+    ensure_init_scripts_configmap(namespace)
 
     user = spec["user"]
     project = spec["project"]
@@ -79,10 +128,21 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
     print(f"Spec keys: {list(spec.keys())}", flush=True)
     print(f"Full spec: {spec}", flush=True)
     print(f"Environment variables from spec: {env_vars}", flush=True)
+
+    # Generate and store password in CRD status
+    status = body.get("status", {})
+    if "password" not in status or not status["password"]:
+        generated_password = token_urlsafe(24)
+        patch.status["password"] = generated_password
+        print(f"Generated VDI password for {name}", flush=True)
+    else:
+        generated_password = status["password"]
+        print(f"Using existing VDI password for {name}", flush=True)
+
     print(f"About to patch status: {dict(patch.status)}", flush=True)
 
     pod_yaml = render_pod_template(
-        name, namespace, user, project, image, connection, None, env_vars
+        name, namespace, user, project, image, connection, generated_password, env_vars
     )
 
     resources = list(yaml.safe_load_all(pod_yaml))
