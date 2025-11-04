@@ -217,10 +217,10 @@ data:
             echo "Using internal cluster URL with defaults"
         else
             # External URL
-            BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://backend\.||' | sed 's|/.*||')
+            BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://portal\.||' | sed 's|/.*||')
             ENVIRONMENT=$(echo "${BACKEND_HOST}" | cut -d. -f1)
             DOMAIN=$(echo "${BACKEND_HOST}" | cut -d. -f2-)
-            echo "Extracted environment and domain from backend URL"
+            echo "Extracted environment and domain from portal URL"
         fi
     else
         # no explicit values, using defaults
@@ -272,7 +272,7 @@ data:
     chmod +x "${DESKTOP_DIR}/firefox.desktop"
 
     if [ -n "${KARECTL_TOKEN}" ]; then
-        SSO_URL="https://backend.${ENVIRONMENT}.${DOMAIN}/auth/sso?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}&app=jupyter"
+        SSO_URL="https://portal.${ENVIRONMENT}.${DOMAIN}/auth/sso?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}&app=jupyter"
 
         create_desktop_shortcut \
             "JupyterHub - ${KARECTL_PROJECT^}" \

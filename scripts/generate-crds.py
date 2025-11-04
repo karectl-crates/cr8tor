@@ -268,7 +268,7 @@ def generate_demo_crds():
                                             "project": {"type": "string"},
                                             "image": {
                                                 "type": "string",
-                                                "default": "ghcr.io/alwin-k-thomas/vdi-mate:dev",
+                                                "default": "ghcr.io/karectl/vdi-mate:v1.0.0",
                                             },
                                             "connection": {
                                                 "type": "string",
