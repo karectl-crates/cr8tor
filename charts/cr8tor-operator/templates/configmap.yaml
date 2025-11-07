@@ -16,7 +16,7 @@ data:
         app: vdi
         user: "{{ "{{" }} user {{ "}}" }}"
         project: "{{ "{{" }} project {{ "}}" }}"
-        karectl.io/project: "{{ "{{" }} project {{ "}}" }}"
+        k8tre.io/project: "{{ "{{" }} project {{ "}}" }}"
         {{ "{% if scheduling and scheduling.labels %}" }}
         {{ "{% for key, value in scheduling.labels.items() %}" }}
         {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
@@ -50,8 +50,8 @@ data:
               value: "{{ "{{" }} linux_user {{ "}}" }}"
             - name: KARECTL_ENVIRONMENT
               value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) {{ "}}" }}"
-            - name: KARECTL_DOMAIN
-              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'KARECTL_DOMAIN') | map(attribute='value') | first | default('karectl.org', true) {{ "}}" }}"
+            - name: K8TRE_DOMAIN
+              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'K8TRE_DOMAIN') | map(attribute='value') | first | default('k8tre.io', true) {{ "}}" }}"
             {{ "{% if env_vars %}" }}
             {{ "{% for env_var in env_vars %}" }}
             - name: {{ "{{" }} env_var.name {{ "}}" }}
@@ -170,7 +170,7 @@ data:
         app: vdi
         user: "{{ "{{" }} user {{ "}}" }}"
         project: "{{ "{{" }} project {{ "}}" }}"
-        karectl.io/project: "{{ "{{" }} project {{ "}}" }}"
+        k8tre.io/project: "{{ "{{" }} project {{ "}}" }}"
         os-type: windows-vm
     spec:
       containers:
@@ -267,14 +267,14 @@ data:
     LINUX_USER="${VDI_LINUX_USER:-ubuntu}"
     echo "Using Linux user: ${LINUX_USER}"
 
-    if [ -n "${KARECTL_ENVIRONMENT}" ] && [ -n "${KARECTL_DOMAIN}" ]; then
+    if [ -n "${KARECTL_ENVIRONMENT}" ] && [ -n "${K8TRE_DOMAIN}" ]; then
         ENVIRONMENT="${KARECTL_ENVIRONMENT}"
-        DOMAIN="${KARECTL_DOMAIN}"
+        DOMAIN="${K8TRE_DOMAIN}"
         echo "Using explicit environment and domain"
     elif [ -n "${KARECTL_BACKEND_URL}" ]; then
         if [[ "${KARECTL_BACKEND_URL}" == *".svc.cluster.local"* ]]; then
             ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
-            DOMAIN="${KARECTL_DOMAIN:-cluster.local}"
+            DOMAIN="${K8TRE_DOMAIN:-cluster.local}"
             echo "Using internal cluster URL with defaults"
         else
             BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://portal\.||' | sed 's|/.*||')
@@ -284,7 +284,7 @@ data:
         fi
     else
         ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
-        DOMAIN="${KARECTL_DOMAIN:-localhost}"
+        DOMAIN="${K8TRE_DOMAIN:-localhost}"
         echo "Using default environment and domain"
     fi
 

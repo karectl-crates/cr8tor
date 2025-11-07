@@ -97,7 +97,7 @@ def get_project_storage_config(project_name):
 
     try:
         project = api.get_cluster_custom_object(
-            group="research.karectl.io",
+            group="research.k8tre.io",
             version="v1alpha1",
             plural="projects",
             name=project_name,
@@ -218,8 +218,8 @@ def ensure_workspace_pvc(namespace, pvc_name, size, storage_class=None, labels=N
         labels = {}
 
     labels.update({
-        "karectl.io/managed-by": "cr8tor",
-        "karectl.io/resource-type": "workspace-storage",
+        "k8tre.io/managed-by": "cr8tor",
+        "k8tre.io/resource-type": "workspace-storage",
     })
 
     # Build PVC spec
@@ -297,7 +297,7 @@ def list_project_pvcs(namespace):
     try:
         pvcs = api.list_namespaced_persistent_volume_claim(
             namespace=namespace,
-            label_selector="karectl.io/managed-by=cr8tor",
+            label_selector="k8tre.io/managed-by=cr8tor",
         )
         return [pvc.metadata.name for pvc in pvcs.items]
 
@@ -320,7 +320,7 @@ def resolve_scheduling_config(vdi_spec, project_name):
     api = kubernetes.client.CustomObjectsApi()
     try:
         project = api.get_cluster_custom_object(
-            group="research.karectl.io",
+            group="research.k8tre.io",
             version="v1alpha1",
             plural="projects",
             name=project_name,

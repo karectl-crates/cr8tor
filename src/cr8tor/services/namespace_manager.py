@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 PROJECT_NAMESPACE_PREFIX = "project-"
 STANDARD_LABELS = {
-    "karectl.io/managed-by": "cr8tor",
-    "karectl.io/resource-type": "project-namespace",
+    "k8tre.io/managed-by": "cr8tor",
+    "k8tre.io/resource-type": "project-namespace",
 }
 
 # JupyterHub ServiceAccount info for permissions in project namespaces
@@ -40,12 +40,12 @@ def ensure_proj_namespace(project_name, description="", labels=None):
     api = kubernetes.client.CoreV1Api()
     ns_name = get_proj_namespace(project_name)
 
-    ns_labels = {**STANDARD_LABELS, "karectl.io/project": project_name}
+    ns_labels = {**STANDARD_LABELS, "k8tre.io/project": project_name}
     if labels:
         ns_labels.update(labels)
 
     ns_annotations = {
-        "karectl.io/project-description": description,
+        "k8tre.io/project-description": description,
     }
 
     ns_body = kubernetes.client.V1Namespace(
@@ -106,7 +106,7 @@ def ensure_resource_quota(project_name, quota_config=None):
         metadata=kubernetes.client.V1ObjectMeta(
             name=quota_name,
             namespace=ns_name,
-            labels={**STANDARD_LABELS, "karectl.io/project": project_name},
+            labels={**STANDARD_LABELS, "k8tre.io/project": project_name},
         ),
         spec=kubernetes.client.V1ResourceQuotaSpec(hard=hard),
     )
@@ -150,7 +150,7 @@ def ensure_limit_range(project_name, limit_config=None):
         metadata=kubernetes.client.V1ObjectMeta(
             name=lr_name,
             namespace=ns_name,
-            labels={**STANDARD_LABELS, "karectl.io/project": project_name},
+            labels={**STANDARD_LABELS, "k8tre.io/project": project_name},
         ),
         spec=kubernetes.client.V1LimitRangeSpec(
             limits=[
@@ -205,7 +205,7 @@ def ensure_jupyter_rolebind(project_name):
         metadata=kubernetes.client.V1ObjectMeta(
             name=name,
             namespace=ns_name,
-            labels={**STANDARD_LABELS, "karectl.io/project": project_name},
+            labels={**STANDARD_LABELS, "k8tre.io/project": project_name},
         ),
         rules=[
             kubernetes.client.V1PolicyRule(
@@ -243,7 +243,7 @@ def ensure_jupyter_rolebind(project_name):
         metadata=kubernetes.client.V1ObjectMeta(
             name=name,
             namespace=ns_name,
-            labels={**STANDARD_LABELS, "karectl.io/project": project_name},
+            labels={**STANDARD_LABELS, "k8tre.io/project": project_name},
         ),
         role_ref=kubernetes.client.V1RoleRef(
             api_group="rbac.authorization.k8s.io",

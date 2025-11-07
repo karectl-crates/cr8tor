@@ -47,7 +47,7 @@ def get_user_projects(user_groups):
     for group_name in user_groups:
         try:
             group_cr = api.get_namespaced_custom_object(
-                group="identity.karectl.io",
+                group="identity.k8tre.io",
                 version="v1alpha1",
                 namespace=IDENTITY_NAMESPACE,
                 plural="groups",
@@ -76,7 +76,7 @@ def get_group_members(group_name):
     # Check for Group CRD's members field
     try:
         group_cr = api.get_namespaced_custom_object(
-            group="identity.karectl.io",
+            group="identity.k8tre.io",
             version="v1alpha1",
             namespace=IDENTITY_NAMESPACE,
             plural="groups",
@@ -92,7 +92,7 @@ def get_group_members(group_name):
     members = []
     try:
         users = api.list_namespaced_custom_object(
-            group="identity.karectl.io",
+            group="identity.k8tre.io",
             version="v1alpha1",
             namespace=IDENTITY_NAMESPACE,
             plural="users",
@@ -134,10 +134,10 @@ def ensure_user_notebook_pvc(username, projects):
             pvc_name = get_pvc_name("notebook", username, project_name)
             # Tracker labels for PVC
             labels = {
-                "karectl.io/user": username,
-                "karectl.io/project": project_name,
-                "karectl.io/workspace-type": "notebook",
-                "karectl.io/provisioned-by": "identity-handler",
+                "k8tre.io/user": username,
+                "k8tre.io/project": project_name,
+                "k8tre.io/workspace-type": "notebook",
+                "k8tre.io/provisioned-by": "identity-handler",
             }
 
             # Create PVC
@@ -193,8 +193,8 @@ def cleanup_user_notebook_pvcs(username, projects):
 # Note: Startup configuration is now handled in main.py to avoid conflicts
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "user")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "user")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "user")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "user")
 def user_create_update(body, spec, meta, status, patch, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
@@ -247,7 +247,7 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
         logger.info(f"User {username} has no groups, skipping storage provisioning")
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "user")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "user")
 def user_delete(body, spec, meta, **kwargs):
     """ Operator function for deleting users.
 
@@ -270,8 +270,8 @@ def user_delete(body, spec, meta, **kwargs):
     kopf.info(meta, reason="UserDeleted", message=f"User {username} deleted. Notebook PVCs retained.")
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "group")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "group")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "group")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "group")
 def group_create_update(body, spec, meta, patch, **kwargs):
     """ Operator function for creating and updating groups.
 
@@ -333,7 +333,7 @@ def group_create_update(body, spec, meta, patch, **kwargs):
         logger.info(f"Group {groupname} has no projects configured")
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "group")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "group")
 def group_delete(body, spec, meta, **kwargs):
     """Operator function for deleting groups."""
     groupname = meta["name"]
@@ -341,9 +341,9 @@ def group_delete(body, spec, meta, **kwargs):
     kopf.info(meta, reason="GroupDeleted", message=f"Group {groupname} deleted.")
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "keycloakclient")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "keycloakclient")
-@kopf.on.resume("identity.karectl.io", "v1alpha1", "keycloakclient")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "keycloakclient")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "keycloakclient")
+@kopf.on.resume("identity.k8tre.io", "v1alpha1", "keycloakclient")
 def client_create_update(body, spec, meta, **kwargs):
     """Handle KeycloakClient create, update, and resume (on operator restart).
     """
@@ -355,7 +355,7 @@ def client_create_update(body, spec, meta, **kwargs):
     )
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "keycloakclient")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "keycloakclient")
 def client_delete(body, spec, meta, **kwargs):
     client_id = spec["clientId"]
     delete_keycloak_client(client_id)
@@ -363,9 +363,9 @@ def client_delete(body, spec, meta, **kwargs):
         meta, reason="ClientDeleted", message=f"Keycloak client {client_id} deleted."
     )
 
-@kopf.on.create("research.karectl.io", "v1alpha1", "project")
-@kopf.on.update("research.karectl.io", "v1alpha1", "project")
-@kopf.on.resume("research.karectl.io", "v1alpha1", "project")
+@kopf.on.create("research.k8tre.io", "v1alpha1", "project")
+@kopf.on.update("research.k8tre.io", "v1alpha1", "project")
+@kopf.on.resume("research.k8tre.io", "v1alpha1", "project")
 def project_create_update(body, spec, meta, patch, **kwargs):
     """ Handle Project resource creation and updates.
         Creates/updates: Project namespace, resource quota, limitRange, jupyterHub hub role binding and cilium network policy
@@ -467,7 +467,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     )
 
 
-@kopf.on.delete("research.karectl.io", "v1alpha1", "project")
+@kopf.on.delete("research.k8tre.io", "v1alpha1", "project")
 def project_delete(body, spec, meta, **kwargs):
     """ Handle Project resource deletion.
 

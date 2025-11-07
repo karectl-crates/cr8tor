@@ -32,7 +32,7 @@ config:
 keycloak:
   # Secret and config containing admin credentials & realm details
   adminSecretName: "keycloak-admin-credentials"
-  realmConfigMapName: "karectl-realm-config"
+  realmConfigMapName: "k8tre-realm-config"
 
 # Identity namespace where User/Group CRDs are stored
 identity:

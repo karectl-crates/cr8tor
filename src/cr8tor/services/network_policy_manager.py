@@ -25,8 +25,8 @@ metadata:
   name: project-isolation
   namespace: {namespace}
   labels:
-    karectl.io/project: "{project_name}"
-    karectl.io/managed-by: cr8tor
+    k8tre.io/project: "{project_name}"
+    k8tre.io/managed-by: cr8tor
 spec:
   endpointSelector: {{}}
 

@@ -138,7 +138,7 @@ def create_deployment(
                 slug=f"{project_name}-ws1",
                 description="A TRE workspace for federated analysis with Python",
                 kubespawner_override={
-                    "image": "ghcr.io/karectl/marimo-notebook-workspace:latest",
+                    "image": "ghcr.io/k8tre/marimo-notebook-workspace:latest",
                     "env": {"PROJECT_NAME": project_name, "WORKSPACE": f"/{project_name}/ws1"},
                 },
             ),
@@ -170,7 +170,7 @@ def create_deployment(
     # Create full Project CRD
     project_name = project_props.reference or project_props.id or "unnamed-project"
     project_crd = {
-        "apiVersion": "research.karectl.io/v1alpha1",
+        "apiVersion": "research.k8tre.io/v1alpha1",
         "kind": "Project",
         "metadata": {
             "name": project_name,
@@ -183,7 +183,7 @@ def create_deployment(
     }
 
     # Validate against CRD schema
-    crd_schema_file = crd_schema_dir.joinpath("projects.research.karectl.io.yaml")
+    crd_schema_file = crd_schema_dir.joinpath("projects.research.k8tre.io.yaml")
     if not crd_schema_file.exists():
         log.info(
             f"⚠ CRD schema file not found: {crd_schema_file}, skipping validation"
@@ -268,7 +268,7 @@ def create_deployment(
             groups=[project_name, f"{project_name}-analyst"],  # Add user to project and analyst groups
             keycloak={"firstName": requesting_agent_props.name.split()[0] if " " in requesting_agent_props.name else requesting_agent_props.name, "lastName": requesting_agent_props.name.split()[-1] if " " in requesting_agent_props.name else ""},
             jupyterhub={"admin": False},
-            karectl={"organization": requesting_agent_props.affiliation.name},
+            k8tre={"organization": requesting_agent_props.affiliation.name},
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
@@ -279,7 +279,7 @@ def create_deployment(
 
     # Create full User CRD
     user_crd = {
-        "apiVersion": "identity.karectl.io/v1alpha1",
+        "apiVersion": "identity.k8tre.io/v1alpha1",
         "kind": "User",
         "metadata": {
             "name": username,
@@ -292,7 +292,7 @@ def create_deployment(
     }
 
     # Validate against User CRD schema
-    user_crd_schema_file = crd_schema_dir.joinpath("users.identity.karectl.io.yaml")
+    user_crd_schema_file = crd_schema_dir.joinpath("users.identity.k8tre.io.yaml")
     if not user_crd_schema_file.exists():
         log.info(
             f"⚠ User CRD schema file not found: {user_crd_schema_file}, skipping validation"
@@ -369,7 +369,7 @@ def create_deployment(
         group_spec = group_def["spec"]
 
         group_crd = {
-            "apiVersion": "identity.karectl.io/v1alpha1",
+            "apiVersion": "identity.k8tre.io/v1alpha1",
             "kind": "Group",
             "metadata": {
                 "name": group_name,
@@ -382,7 +382,7 @@ def create_deployment(
         }
 
         # Validate against Group CRD schema
-        group_crd_schema_file = crd_schema_dir.joinpath("groups.identity.karectl.io.yaml")
+        group_crd_schema_file = crd_schema_dir.joinpath("groups.identity.k8tre.io.yaml")
         if not group_crd_schema_file.exists():
             log.info(
                 f"Group CRD schema file not found: {group_crd_schema_file}, skipping validation"
