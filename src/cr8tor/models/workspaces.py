@@ -14,14 +14,14 @@ class EnvironmentVariable(CRDSpec):
     value: str = Field(..., description="Environment variable value")
 
 
-@CRDRegistry.register("karectl.io", "v1alpha1", "VDIInstance", "vdiinstances")
+@CRDRegistry.register("k8tre.io", "v1alpha1", "VDIInstance", "vdiinstances")
 class VDIInstanceSpec(CRDSpec):
     """VDI Instance CRD specification."""
 
     user: str = Field(..., description="Username for the VDI instance")
     project: str = Field(..., description="Project name for the VDI instance")
     image: str = Field(
-        default="ghcr.io/karectl/vdi-mate:v1.0.0",
+        default="ghcr.io/k8tre/vdi-mate:v1.0.0",
         description="Container image to use for the VDI",
     )
     connection: str = Field(

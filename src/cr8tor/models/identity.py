@@ -6,7 +6,7 @@ from cr8tor.crd.registry import CRDRegistry
 from cr8tor.crd.base import CRDSpec
 
 
-@CRDRegistry.register("identity.karectl.io", "v1alpha1", "User", "users")
+@CRDRegistry.register("identity.k8tre.io", "v1alpha1", "User", "users")
 class UserSpec(CRDSpec):
     """User CRD specification."""
 
@@ -22,12 +22,12 @@ class UserSpec(CRDSpec):
     jupyterhub: Optional[Dict[str, Any]] = Field(
         default=None, description="JupyterHub-specific configuration"
     )
-    karectl: Optional[Dict[str, Any]] = Field(
-        default=None, description="Karectl-specific configuration"
+    k8tre: Optional[Dict[str, Any]] = Field(
+        default=None, description="K8tre-specific configuration"
     )
 
 
-@CRDRegistry.register("identity.karectl.io", "v1alpha1", "Group", "groups")
+@CRDRegistry.register("identity.k8tre.io", "v1alpha1", "Group", "groups")
 class GroupSpec(CRDSpec):
     """Group CRD specification."""
 
@@ -52,7 +52,7 @@ class GroupSpec(CRDSpec):
 
 
 @CRDRegistry.register(
-    "identity.karectl.io", "v1alpha1", "KeycloakClient", "keycloakclients"
+    "identity.k8tre.io", "v1alpha1", "KeycloakClient", "keycloakclients"
 )
 class KeycloakClientSpec(CRDSpec):
     """Keycloak Client CRD specification."""
@@ -132,7 +132,7 @@ class ProfileConfig(CRDSpec):
         default=None, description="Kubespawner-specific overrides"
     )
 
-@CRDRegistry.register("research.karectl.io", "v1alpha1", "Project", "projects")
+@CRDRegistry.register("research.k8tre.io", "v1alpha1", "Project", "projects")
 class ProjectSpec(CRDSpec):
     """Project CRD specification for research projects."""
 

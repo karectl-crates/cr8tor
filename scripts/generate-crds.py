@@ -17,9 +17,9 @@ def generate_demo_crds():
         {
             "apiVersion": "apiextensions.k8s.io/v1",
             "kind": "CustomResourceDefinition",
-            "metadata": {"name": "users.identity.karectl.io"},
+            "metadata": {"name": "users.identity.k8tre.io"},
             "spec": {
-                "group": "identity.karectl.io",
+                "group": "identity.k8tre.io",
                 "versions": [
                     {
                         "name": "v1alpha1",
@@ -50,7 +50,7 @@ def generate_demo_crds():
                                                 "type": "object",
                                                 "additionalProperties": True,
                                             },
-                                            "karectl": {
+                                            "k8tre": {
                                                 "type": "object",
                                                 "additionalProperties": True,
                                             },
@@ -88,9 +88,9 @@ def generate_demo_crds():
         {
             "apiVersion": "apiextensions.k8s.io/v1",
             "kind": "CustomResourceDefinition",
-            "metadata": {"name": "groups.identity.karectl.io"},
+            "metadata": {"name": "groups.identity.k8tre.io"},
             "spec": {
-                "group": "identity.karectl.io",
+                "group": "identity.k8tre.io",
                 "versions": [
                     {
                         "name": "v1alpha1",
@@ -147,9 +147,9 @@ def generate_demo_crds():
         {
             "apiVersion": "apiextensions.k8s.io/v1",
             "kind": "CustomResourceDefinition",
-            "metadata": {"name": "keycloakclients.identity.karectl.io"},
+            "metadata": {"name": "keycloakclients.identity.k8tre.io"},
             "spec": {
-                "group": "identity.karectl.io",
+                "group": "identity.k8tre.io",
                 "versions": [
                     {
                         "name": "v1alpha1",
@@ -249,9 +249,9 @@ def generate_demo_crds():
         {
             "apiVersion": "apiextensions.k8s.io/v1",
             "kind": "CustomResourceDefinition",
-            "metadata": {"name": "vdiinstances.karectl.io"},
+            "metadata": {"name": "vdiinstances.k8tre.io"},
             "spec": {
-                "group": "karectl.io",
+                "group": "k8tre.io",
                 "versions": [
                     {
                         "name": "v1alpha1",
@@ -268,7 +268,7 @@ def generate_demo_crds():
                                             "project": {"type": "string"},
                                             "image": {
                                                 "type": "string",
-                                                "default": "ghcr.io/karectl/vdi-mate:v1.0.0",
+                                                "default": "ghcr.io/k8tre/vdi-mate:v1.0.0",
                                             },
                                             "connection": {
                                                 "type": "string",

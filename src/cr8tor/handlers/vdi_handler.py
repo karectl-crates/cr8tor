@@ -113,7 +113,7 @@ def render_pod_template(
     )
 
 
-@kopf.on.create("karectl.io", "v1alpha1", "vdiinstances")
+@kopf.on.create("k8tre.io", "v1alpha1", "vdiinstances")
 def create_vdi(spec, name, namespace, patch, body, **kwargs):
     from secrets import token_urlsafe
     import re
@@ -123,7 +123,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
 
     user = spec["user"]
     project = spec["project"]
-    image = spec.get("image", "ghcr.io/karectl/vdi-mate:v1.0.0")
+    image = spec.get("image", "ghcr.io/k8tre/vdi-mate:v1.0.0")
     connection = spec.get("connection", "rdp")
     env_vars = spec.get("env", [])
 
@@ -141,7 +141,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
         linux_user = linux_user[:32]
         print(f"Warning: Linux username truncated to 32 chars: {linux_user}", flush=True)
 
-    print(f"Generated Linux username: {linux_user} for Karectl user: {user}, project: {project}", flush=True)
+    print(f"Generated Linux username: {linux_user} for k8tre user: {user}, project: {project}", flush=True)
 
     # Generate and store password in CRD status
     status = body.get("status", {})
@@ -165,7 +165,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
     api = kubernetes.client.CoreV1Api()
 
     owner_ref = {
-        "apiVersion": "karectl.io/v1alpha1",
+        "apiVersion": "k8tre.io/v1alpha1",
         "kind": "VDIInstance",
         "name": name,
         "uid": body["metadata"]["uid"],
@@ -207,7 +207,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
     print(f"Created resources: {created_resources}", flush=True)
 
 
-@kopf.on.delete("karectl.io", "v1alpha1", "vdiinstances")
+@kopf.on.delete("k8tre.io", "v1alpha1", "vdiinstances")
 def delete_vdi(spec, name, namespace, patch, **kwargs):
     print(f"Deleting VDI: {name}", flush=True)
     user = spec["user"]
@@ -237,7 +237,7 @@ def delete_vdi(spec, name, namespace, patch, **kwargs):
     patch.status["phase"] = "Terminated"
 
 
-@kopf.on.update("karectl.io", "v1alpha1", "vdiinstances")
+@kopf.on.update("k8tre.io", "v1alpha1", "vdiinstances")
 def update_vdi(spec, name, namespace, patch, body, **kwargs):
     """Handle VDI updates, particularly for token refresh"""
     print(f"Updating VDI: {name}", flush=True)

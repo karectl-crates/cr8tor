@@ -30,7 +30,7 @@ class CRDRegistry:
         """Decorator to register CRD models.
 
         Args:
-            group: API group (e.g., 'identity.karectl.io')
+            group: API group (e.g., 'identity.k8tre.io')
             version: API version (e.g., 'v1alpha1')
             kind: Kind name (e.g., 'User')
             plural: Plural name (defaults to kind.lower() + 's')

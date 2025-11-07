@@ -11,8 +11,8 @@ from cr8tor.services.client import ensure_realm_exists
 # Note: Startup configuration is now handled in main.py to avoid conflicts
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "user")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "user")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "user")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "user")
 def user_create_update(body, spec, meta, **kwargs):
     """Operator function for creating and updating users."""
     username = spec["username"]
@@ -21,7 +21,7 @@ def user_create_update(body, spec, meta, **kwargs):
     kopf.info(meta, reason="UserSynced", message=f"User {username} synced.")
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "user")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "user")
 def user_delete(body, spec, meta, **kwargs):
     """Operator function for deleting users."""
     username = spec["username"]
@@ -29,8 +29,8 @@ def user_delete(body, spec, meta, **kwargs):
     kopf.info(meta, reason="UserDeleted", message=f"User {username} deleted.")
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "group")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "group")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "group")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "group")
 def group_create_update(body, spec, meta, **kwargs):
     """Operator function for creating and updating groups."""
     groupname = meta["name"]
@@ -39,7 +39,7 @@ def group_create_update(body, spec, meta, **kwargs):
     kopf.info(meta, reason="GroupSynced", message=f"Group {groupname} synced.")
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "group")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "group")
 def group_delete(body, spec, meta, **kwargs):
     """Operator function for deleting groups."""
     groupname = meta["name"]
@@ -47,9 +47,9 @@ def group_delete(body, spec, meta, **kwargs):
     kopf.info(meta, reason="GroupDeleted", message=f"Group {groupname} deleted.")
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "keycloakclient")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "keycloakclient")
-@kopf.on.resume("identity.karectl.io", "v1alpha1", "keycloakclient")
+@kopf.on.create("identity.k8tre.io", "v1alpha1", "keycloakclient")
+@kopf.on.update("identity.k8tre.io", "v1alpha1", "keycloakclient")
+@kopf.on.resume("identity.k8tre.io", "v1alpha1", "keycloakclient")
 def client_create_update(body, spec, meta, **kwargs):
     """Handle KeycloakClient create, update, and resume (on operator restart).
     """
@@ -61,7 +61,7 @@ def client_create_update(body, spec, meta, **kwargs):
     )
 
 
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "keycloakclient")
+@kopf.on.delete("identity.k8tre.io", "v1alpha1", "keycloakclient")
 def client_delete(body, spec, meta, **kwargs):
     client_id = spec["clientId"]
     delete_keycloak_client(client_id)
@@ -69,8 +69,8 @@ def client_delete(body, spec, meta, **kwargs):
         meta, reason="ClientDeleted", message=f"Keycloak client {client_id} deleted."
     )
 
-@kopf.on.create("research.karectl.io", "v1alpha1", "project")
-@kopf.on.update("research.karectl.io", "v1alpha1", "project")
+@kopf.on.create("research.k8tre.io", "v1alpha1", "project")
+@kopf.on.update("research.k8tre.io", "v1alpha1", "project")
 def project_create_update(body, spec, meta, **kwargs):
     """Handle Project resource creation and updates."""
     project_name = meta["name"]
@@ -86,7 +86,7 @@ def project_create_update(body, spec, meta, **kwargs):
     )
 
 
-@kopf.on.delete("research.karectl.io", "v1alpha1", "project")
+@kopf.on.delete("research.k8tre.io", "v1alpha1", "project")
 def project_delete(body, spec, meta, **kwargs):
     """Handle Project resource deletion.
     """

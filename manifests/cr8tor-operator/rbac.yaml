@@ -9,17 +9,17 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch"]
 
   # Identity CRDs
-  - apiGroups: ["identity.karectl.io"]
+  - apiGroups: ["identity.k8tre.io"]
     resources: ["users", "groups", "keycloakclients"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   # Research CRDs
-  - apiGroups: ["research.karectl.io"]
+  - apiGroups: ["research.k8tre.io"]
     resources: ["projects"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   # Workspaces CRDs
-  - apiGroups: ["karectl.io"]
+  - apiGroups: ["k8tre.io"]
     resources: ["vdiinstances"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
@@ -39,7 +39,7 @@ rules:
     verbs: ["create", "patch"]
 
   # For status updates
-  - apiGroups: ["identity.karectl.io", "research.karectl.io", "karectl.io"]
+  - apiGroups: ["identity.k8tre.io", "research.k8tre.io", "k8tre.io"]
     resources: ["*/status"]
     verbs: ["get", "update", "patch"]
 
