@@ -268,7 +268,7 @@ def generate_demo_crds():
                                             "project": {"type": "string"},
                                             "image": {
                                                 "type": "string",
-                                                "default": "ghcr.io/k8tre/vdi-mate:v1.0.0",
+                                                "default": "ghcr.io/k8tre/vdi-mate:v1.0.0-light",
                                             },
                                             "connection": {
                                                 "type": "string",

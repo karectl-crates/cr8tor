@@ -123,7 +123,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
 
     user = spec["user"]
     project = spec["project"]
-    image = spec.get("image", "ghcr.io/k8tre/vdi-mate:v1.0.0")
+    image = spec.get("image", "ghcr.io/k8tre/vdi-mate:v1.0.0-light")
     connection = spec.get("connection", "rdp")
     env_vars = spec.get("env", [])
 

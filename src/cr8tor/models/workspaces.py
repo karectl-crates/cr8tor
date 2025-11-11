@@ -21,7 +21,7 @@ class VDIInstanceSpec(CRDSpec):
     user: str = Field(..., description="Username for the VDI instance")
     project: str = Field(..., description="Project name for the VDI instance")
     image: str = Field(
-        default="ghcr.io/k8tre/vdi-mate:v1.0.0",
+        default="ghcr.io/k8tre/vdi-mate:v1.0.0-light",
         description="Container image to use for the VDI",
     )
     connection: str = Field(
