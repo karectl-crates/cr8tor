@@ -281,21 +281,35 @@ data:
             "jupyterhub.desktop"
     fi
 
-    # Configure MATE desktop settings
-    mkdir -p /home/${LINUX_USER}/.config/dconf
+    # Configure XFCE4 desktop settings
+    mkdir -p /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml
 
-    # Reset MATE panel to defaults
-    dconf reset -f /org/mate/panel/ 2>/dev/null || true
-    cat > /home/${LINUX_USER}/.config/dconf/user.conf <<EOF
-    [org/mate/screensaver]
-    idle-activation-enabled=false
-    lock-enabled=false
-
-    [org/mate/power-manager]
-    sleep-display-ac=0
-    sleep-display-battery=0
-    button-lid-ac='nothing'
-    button-lid-battery='nothing'
+    # Disable XFCE4 screensaver
+    cat > /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <channel name="xfce4-screensaver" version="1.0">
+      <property name="saver" type="empty">
+        <property name="enabled" type="bool" value="false"/>
+        <property name="mode" type="int" value="0"/>
+      </property>
+      <property name="lock" type="empty">
+        <property name="enabled" type="bool" value="false"/>
+      </property>
+    </channel>
+    EOF
+    # Disable XFCE4 power management
+    cat > /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <channel name="xfce4-power-manager" version="1.0">
+      <property name="xfce4-power-manager" type="empty">
+        <property name="dpms-enabled" type="bool" value="false"/>
+        <property name="blank-on-ac" type="int" value="0"/>
+        <property name="dpms-on-ac-sleep" type="uint" value="0"/>
+        <property name="dpms-on-ac-off" type="uint" value="0"/>
+        <property name="lock-screen-suspend-hibernate" type="bool" value="false"/>
+        <property name="logind-handle-lid-switch" type="bool" value="false"/>
+      </property>
+    </channel>
     EOF
 
     # Set Firefox preferences
