@@ -13,6 +13,9 @@ class UserSpec(CRDSpec):
     username: str = Field(..., description="Unique username for the user")
     email: str = Field(..., description="Email address of the user")
     enabled: bool = Field(default=True, description="Whether the user is enabled")
+    password: Optional[str] = Field(
+        default=None, description="User password (if not set, a temporary password will be generated)"
+    )
     groups: List[str] = Field(
         default_factory=list, description="List of groups the user belongs to"
     )
