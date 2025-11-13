@@ -9,7 +9,9 @@ def sync_keycloak_user(username, spec):
     email = spec.get("email")
     enabled = spec.get("enabled", True)
     groups = spec.get("groups", [])
+    password = spec.get("password")
     user_created = False
+    temp_password = None
 
     # Try to get the user first
     try:
@@ -54,11 +56,18 @@ def sync_keycloak_user(username, spec):
 
     # Set a temp password if the user was just created
     if user_created:
-        temp_password = generate_temp_password()
-        keycloak_client.set_user_password(user_id, temp_password, temporary=True)
-        write_passwords(username, temp_password)
+        if password:
+            keycloak_client.set_user_password(user_id, password, temporary=False)
+            temp_password = password
+            print(f"[INFO] Set password for {username} from spec")
+        else:
+            temp_password = generate_temp_password()
+            keycloak_client.set_user_password(user_id, temp_password, temporary=True)
+            write_passwords(username, temp_password)
 
     print(f"[INFO] Synced user {username} to Keycloak")
+
+    return {"password": temp_password} if temp_password else {}
 
 
 def delete_keycloak_user(username):

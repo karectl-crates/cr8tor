@@ -13,11 +13,15 @@ from cr8tor.services.client import ensure_realm_exists
 
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "user")
-def user_create_update(body, spec, meta, **kwargs):
+def user_create_update(body, spec, meta, status, patch, **kwargs):
     """Operator function for creating and updating users."""
     username = spec["username"]
     ensure_realm_exists()
-    sync_keycloak_user(username, spec)
+    result = sync_keycloak_user(username, spec)
+
+    if result and "password" in result:
+        patch.status["initialPassword"] = result["password"]
+
     kopf.info(meta, reason="UserSynced", message=f"User {username} synced.")
 
 
