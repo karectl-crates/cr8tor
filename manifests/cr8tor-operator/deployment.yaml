@@ -61,17 +61,17 @@ spec:
             - name: KEYCLOAK_REALM
               valueFrom:
                 configMapKeyRef:
-                  name: k8tre-realm-config
+                  name: karectl-realm-config
                   key: realm-name
             - name: KEYCLOAK_URL
               valueFrom:
                 configMapKeyRef:
-                  name: k8tre-realm-config
+                  name: karectl-realm-config
                   key: keycloak-url
             - name: KEYCLOAK_VERIFY_TLS
               valueFrom:
                 configMapKeyRef:
-                  name: k8tre-realm-config
+                  name: karectl-realm-config
                   key: keycloak-verify-tls
 
           volumeMounts:
