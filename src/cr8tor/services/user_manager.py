@@ -1,4 +1,4 @@
-from keycloak.exceptions import KeycloakGetError, KeycloakPutError
+from keycloak.exceptions import KeycloakGetError, KeycloakPutError, KeycloakDeleteError
 from .client import get_client
 from .utils import generate_temp_password, write_passwords
 
@@ -77,7 +77,7 @@ def delete_keycloak_user(username):
         user_id = keycloak_client.get_user_id(username)
         keycloak_client.delete_user(user_id)
         print(f"Deleted user {username}")
-    except KeycloakGetError as err:
+    except (KeycloakGetError, KeycloakDeleteError) as err:
         if "User not found" in str(err):
             print(f"User {username} already deleted. Treating as success.")
             return
