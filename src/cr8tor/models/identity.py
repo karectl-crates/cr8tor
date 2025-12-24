@@ -104,39 +104,6 @@ class KeycloakClientSpec(CRDSpec):
     )
 
 
-@CRDRegistry.register(
-    "identity.karectl.io", "v1alpha1", "GiteaClient", "giteaclients"
-)
-class GiteaClientSpec(CRDSpec):
-    """Gitea Client CRD specs."""
-
-    name: str = Field(..., description="Name of the OAuth source in Gitea")
-    giteaUrl: str = Field(..., description="Gitea API URL")
-    keycloakUrl: str = Field(..., description="Keycloak base URL")
-    realm: str = Field(default="karectl-app", description="Keycloak realm name")
-    adminSecretRef: Dict[str, str] = Field(
-        ...,
-        description="Reference to secret"
-    )
-    oidcSecretRef: Dict[str, str] = Field(
-        ...,
-        description="Reference to oidc secret"
-    )
-    scopes: List[str] = Field(
-        default_factory=lambda: ["openid", "profile", "email", "groups"],
-        description="OAuth scopes to request"
-    )
-    groupClaimName: str = Field(
-        default="groups",
-        description="Claim name for group mapping"
-    )
-    skipLocalTwoFA: bool = Field(
-        default=False,
-        description="Skip local authentication for OAuth users"
-    )
-    enabled: bool = Field(default=True, description="Whether the OAuth source is enabled")
-
-
 class AppConfig(CRDSpec):
     """Application configuration within a project."""
 

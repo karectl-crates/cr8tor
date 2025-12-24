@@ -5,7 +5,6 @@ from kubernetes import client, config
 from cr8tor.services.user_manager import sync_keycloak_user, delete_keycloak_user
 from cr8tor.services.group_manager import sync_keycloak_group, delete_keycloak_group
 from cr8tor.services.client_manager import sync_keycloak_client, delete_keycloak_client
-from cr8tor.services.gitea_manager import sync_gitea_oauth_source, delete_gitea_oauth_source
 from cr8tor.services.gitea_org_manager import sync_project_to_gitea, delete_project_from_gitea
 from cr8tor.services.client import ensure_realm_exists
 
@@ -165,51 +164,3 @@ def project_delete(body, spec, meta, **kwargs):
     )
 
 
-@kopf.on.create("identity.karectl.io", "v1alpha1", "giteaclient")
-@kopf.on.update("identity.karectl.io", "v1alpha1", "giteaclient")
-@kopf.on.resume("identity.karectl.io", "v1alpha1", "giteaclient")
-def gitea_client_create_update(body, spec, meta, **kwargs):
-    """Handle GiteaClient create, update, and resume (on operator restart)."""
-    source_name = spec["name"]
-    namespace = meta.get("namespace", "gitea")
-
-    try:
-        sync_gitea_oauth_source(source_name, spec, namespace=namespace)
-        kopf.info(
-            meta,
-            reason="GiteaClientSynced",
-            message=f"Gitea OAuth source '{source_name}' synced successfully"
-        )
-    except Exception as e:
-        kopf.exception(
-            meta,
-            reason="GiteaClientSyncFailed",
-            message=f"Failed to sync Gitea OAuth source '{source_name}': {e}"
-        )
-        raise
-
-
-@kopf.on.delete("identity.karectl.io", "v1alpha1", "giteaclient")
-def gitea_client_delete(body, spec, meta, **kwargs):
-    """Handle GiteaClient deletion."""
-    source_name = spec["name"]
-    gitea_url = spec["giteaUrl"]
-    admin_secret_ref = spec["adminSecretRef"]
-    namespace = meta.get("namespace", "gitea")
-
-    try:
-        delete_gitea_oauth_source(
-            source_name, gitea_url, admin_secret_ref, namespace=namespace
-        )
-        kopf.info(
-            meta,
-            reason="GiteaClientDeleted",
-            message=f"Gitea OAuth source '{source_name}' deleted successfully"
-        )
-    except Exception as e:
-        kopf.exception(
-            meta,
-            reason="GiteaClientDeleteFailed",
-            message=f"Failed to delete Gitea OAuth source '{source_name}': {e}"
-        )
-        raise
