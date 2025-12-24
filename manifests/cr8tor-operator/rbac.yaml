@@ -10,7 +10,7 @@ rules:
 
   # Identity CRDs
   - apiGroups: ["identity.karectl.io"]
-    resources: ["users", "groups", "keycloakclients"]
+    resources: ["users", "groups", "keycloakclients", "giteaclients"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
   # Research CRDs
