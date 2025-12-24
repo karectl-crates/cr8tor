@@ -124,7 +124,7 @@ def project_create_update(body, spec, meta, **kwargs):
                 message=f"Project {project_name} synced to Gitea"
             )
         except Exception as e:
-            kopf.error(
+            kopf.exception(
                 meta,
                 reason="GiteaSyncFailed",
                 message=f"Failed to sync project {project_name} to Gitea: {e}"
@@ -181,7 +181,7 @@ def gitea_client_create_update(body, spec, meta, **kwargs):
             message=f"Gitea OAuth source '{source_name}' synced successfully"
         )
     except Exception as e:
-        kopf.error(
+        kopf.exception(
             meta,
             reason="GiteaClientSyncFailed",
             message=f"Failed to sync Gitea OAuth source '{source_name}': {e}"
@@ -207,7 +207,7 @@ def gitea_client_delete(body, spec, meta, **kwargs):
             message=f"Gitea OAuth source '{source_name}' deleted successfully"
         )
     except Exception as e:
-        kopf.error(
+        kopf.exception(
             meta,
             reason="GiteaClientDeleteFailed",
             message=f"Failed to delete Gitea OAuth source '{source_name}': {e}"
