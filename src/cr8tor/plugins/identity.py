@@ -28,10 +28,11 @@ class IdentityPlugin(PluginBase):
             UserSpec,
             GroupSpec,
             KeycloakClientSpec,
+            GiteaClientSpec,
             ProjectSpec,
         )
 
-        return [UserSpec, GroupSpec, KeycloakClientSpec, ProjectSpec]
+        return [UserSpec, GroupSpec, KeycloakClientSpec, GiteaClientSpec, ProjectSpec]
 
     def _initialise_plugin(self):
         """Initialise identity-specific resources."""
