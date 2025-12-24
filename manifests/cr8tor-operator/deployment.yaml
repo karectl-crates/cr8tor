@@ -73,6 +73,16 @@ spec:
                 configMapKeyRef:
                   name: karectl-realm-config
                   key: keycloak-verify-tls
+            - name: GITEA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: karectl-realm-config
+                  key: gitea-url
+            - name: GITEA_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-admin-credentials
+                  key: admin-token
 
           volumeMounts:
             - name: vdi-templates
