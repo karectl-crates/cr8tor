@@ -85,6 +85,14 @@ class GiteaOrgManager:
             "permission": permission,
             "can_create_org_repo": permission == "admin",
             "includes_all_repositories": True,
+            "units": [
+                "repo.code",
+                "repo.issues",
+                "repo.pulls",
+                "repo.releases",
+                "repo.wiki",
+                "repo.projects"
+            ],
         }
 
         try:
