@@ -10,18 +10,19 @@ logger = logging.getLogger(__name__)
 
 # Get gitea config from env
 GITEA_URL = os.getenv("GITEA_URL")
-GITEA_ADMIN_TOKEN = os.getenv("GITEA_ADMIN_TOKEN")
+GITEA_ADMIN_USERNAME = os.getenv("GITEA_ADMIN_USERNAME")
+GITEA_ADMIN_PASSWORD = os.getenv("GITEA_ADMIN_PASSWORD")
 
 
 class GiteaOrgManager:
     """ Manage gitea organisations for projects.
     """
 
-    def __init__(self, gitea_url = None, admin_token = None):
+    def __init__(self, gitea_url=None, admin_username=None, admin_password=None):
         self.base_url = gitea_url or GITEA_URL
-        self.admin_token = admin_token or GITEA_ADMIN_TOKEN
+        self.admin_username = admin_username or GITEA_ADMIN_USERNAME
+        self.admin_password = admin_password or GITEA_ADMIN_PASSWORD
         self.headers = {
-            "Authorization": f"token {self.admin_token}",
             "Content-Type": "application/json",
         }
 
@@ -31,7 +32,8 @@ class GiteaOrgManager:
 
         try:
             response = requests.request(
-                method, url, headers=self.headers, timeout=30, verify=False, **kwargs
+                method, url, headers=self.headers, timeout=30, verify=False,
+                auth=(self.admin_username, self.admin_password), **kwargs
             )
             response.raise_for_status()
             return response.json() if response.text else None

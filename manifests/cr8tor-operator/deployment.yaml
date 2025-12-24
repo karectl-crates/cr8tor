@@ -78,11 +78,16 @@ spec:
                 configMapKeyRef:
                   name: karectl-realm-config
                   key: gitea-url
-            - name: GITEA_ADMIN_TOKEN
+            - name: GITEA_ADMIN_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: gitea-admin-credentials
-                  key: admin-token
+                  key: username
+            - name: GITEA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gitea-admin-credentials
+                  key: password
 
           volumeMounts:
             - name: vdi-templates
