@@ -69,7 +69,7 @@ def wait_for_gitea(gitea_url, timeout=300):
 
     while time.time() - start_time < timeout:
         try:
-            response = requests.get(version_url, timeout=5)
+            response = requests.get(version_url, timeout=5, verify=False)
             if response.status_code == 200:
                 return True
         except requests.exceptions.RequestException:
@@ -96,7 +96,8 @@ def get_existing_oauth_source(gitea_url, admin_username, admin_password, source_
         response = requests.get(
             auth_url,
             auth=(admin_username, admin_password),
-            timeout=10
+            timeout=10,
+            verify=False
         )
         response.raise_for_status()
         auth_sources = response.json()
@@ -183,7 +184,8 @@ def sync_gitea_oauth_source(source_name, spec, namespace=None):
                 json=oauth_config,
                 auth=(admin_username, admin_password),
                 headers={"Content-Type": "application/json"},
-                timeout=10
+                timeout=10,
+                verify=False
             )
             response.raise_for_status()
             print(f"Updated Gitea OAuth source '{source_name}' (ID: {source_id})")
@@ -197,7 +199,8 @@ def sync_gitea_oauth_source(source_name, spec, namespace=None):
                 json=oauth_config,
                 auth=(admin_username, admin_password),
                 headers={"Content-Type": "application/json"},
-                timeout=10
+                timeout=10,
+                verify=False
             )
 
             if response.status_code in [200, 201]:
@@ -247,7 +250,8 @@ def delete_gitea_oauth_source(source_name, gitea_url, admin_secret_ref, namespac
         response = requests.delete(
             delete_url,
             auth=(admin_username, admin_password),
-            timeout=10
+            timeout=10,
+            verify=False
         )
         response.raise_for_status()
 

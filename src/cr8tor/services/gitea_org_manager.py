@@ -31,7 +31,7 @@ class GiteaOrgManager:
 
         try:
             response = requests.request(
-                method, url, headers=self.headers, timeout=30, **kwargs
+                method, url, headers=self.headers, timeout=30, verify=False, **kwargs
             )
             response.raise_for_status()
             return response.json() if response.text else None
