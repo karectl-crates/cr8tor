@@ -5,6 +5,10 @@ from cr8tor.services.user_manager import sync_keycloak_user, delete_keycloak_use
 from cr8tor.services.group_manager import sync_keycloak_group, delete_keycloak_group
 from cr8tor.services.client_manager import sync_keycloak_client, delete_keycloak_client
 from cr8tor.services.client import ensure_realm_exists
+from cr8tor.services.network_policy_manager import (
+    create_project_network_policy,
+    delete_project_network_policy,
+)
 
 
 # https://www.reddit.com/r/kubernetes/comments/1dge5qk/writing_an_operator_with_kopf/
@@ -76,12 +80,32 @@ def client_delete(body, spec, meta, **kwargs):
 @kopf.on.create("research.karectl.io", "v1alpha1", "project")
 @kopf.on.update("research.karectl.io", "v1alpha1", "project")
 def project_create_update(body, spec, meta, **kwargs):
-    """Handle Project resource creation and updates."""
+    """Handle Project resource creation and updates.
+
+    Creates/updates:
+    - Project validation
+    - CiliumNetworkPolicy for project isolation
+    """
     project_name = meta["name"]
 
     description = spec.get("description", "")
     apps = spec.get("apps", [])
     profiles = spec.get("profiles", [])
+
+    # Create/update network policy for project isolation
+    try:
+        policy_result = create_project_network_policy(project_name)
+        kopf.info(
+            meta,
+            reason="NetworkPolicyCreated",
+            message=f"Network policy {policy_result['status']}: {policy_result['name']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="NetworkPolicyFailed",
+            message=f"Failed to create network policy for {project_name}: {e}",
+        )
 
     kopf.info(
         meta,
@@ -96,8 +120,23 @@ def project_delete(body, spec, meta, **kwargs):
     """
     project_name = meta["name"]
 
+    # Delete network policy for project
+    try:
+        policy_result = delete_project_network_policy(project_name)
+        kopf.info(
+            meta,
+            reason="NetworkPolicyDeleted",
+            message=f"Network policy {policy_result['status']}: {policy_result['name']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="NetworkPolicyDeleteFailed",
+            message=f"Failed to delete network policy for {project_name}: {e}",
+        )
+
     kopf.info(
         meta,
         reason="ProjectDeleted",
-        message=f"Project {project_name} cleanup completed (validation only for now)",
+        message=f"Project {project_name} cleanup completed",
     )

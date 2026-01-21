@@ -23,6 +23,11 @@ rules:
     resources: ["vdiinstances"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
+  # Cilium Network Policies (project isolation)
+  - apiGroups: ["cilium.io"]
+    resources: ["ciliumnetworkpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
   # Core Kubernetes resources
   - apiGroups: [""]
     resources: ["pods", "services"]
