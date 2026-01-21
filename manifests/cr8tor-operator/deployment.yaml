@@ -30,7 +30,7 @@ spec:
             - name: GIT_REPO
               value: "https://github.com/karectl-crates/cr8tor"
             - name: GIT_REF
-              value: "feature/at-network-policy-setup"
+              value: "main"
 
             - name: LOG_LEVEL
               value: "INFO"

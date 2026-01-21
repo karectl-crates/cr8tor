@@ -79,6 +79,7 @@ def client_delete(body, spec, meta, **kwargs):
 
 @kopf.on.create("research.karectl.io", "v1alpha1", "project")
 @kopf.on.update("research.karectl.io", "v1alpha1", "project")
+@kopf.on.resume("research.karectl.io", "v1alpha1", "project")
 def project_create_update(body, spec, meta, **kwargs):
     """Handle Project resource creation and updates.
 
