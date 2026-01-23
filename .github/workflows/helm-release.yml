@@ -101,16 +101,12 @@ jobs:
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Final version: ${VERSION}"
-      - name: Update Chart.yaml versions
-        run: |
-          # Set both chart version and appVersion
-          sed -i "s/^version:.*/version: ${{ steps.final_version.outputs.version }}/" charts/${{ env.CHART_NAME }}/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.final_version.outputs.version }}\"/" charts/${{ env.CHART_NAME }}/Chart.yaml
-          echo "Updated Chart.yaml:"
-          cat charts/${{ env.CHART_NAME }}/Chart.yaml
       - name: Package chart
         run: |
-          helm package charts/${{ env.CHART_NAME }} --destination .helm-packages
+          helm package charts/${{ env.CHART_NAME }} \
+            --destination .helm-packages \
+            --version "${{ steps.final_version.outputs.version }}" \
+            --app-version "${{ steps.final_version.outputs.version }}"
       - name: Push chart to OCI registry
         run: |
           helm push .helm-packages/${{ env.CHART_NAME }}-${{ steps.final_version.outputs.version }}.tgz oci://${{ env.REGISTRY }}/karectl-crates/charts
