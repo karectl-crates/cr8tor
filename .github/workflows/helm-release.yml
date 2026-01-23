@@ -1,0 +1,122 @@
+name: Release Helm Chart
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/helm-release.yml'
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'Chart version to release(optional)'
+        required: false
+        type: string
+env:
+  REGISTRY: ghcr.io
+  CHART_NAME: cr8tor-operator
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+      - name: Lint chart
+        run: helm lint charts/${{ env.CHART_NAME }}
+  release:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Get version from Chart.yaml or tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # From tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "type=release" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.chart_version }}" ]; then
+            # From manual dispatch
+            VERSION="${{ inputs.chart_version }}"
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "type=manual" >> $GITHUB_OUTPUT
+          else
+            # From Chart.yaml
+            BASE_VERSION=$(grep '^version:' charts/${{ env.CHART_NAME }}/Chart.yaml | awk '{print $2}')
+            echo "base_version=${BASE_VERSION}" >> $GITHUB_OUTPUT
+            echo "type=check" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if version exists in registry
+        id: check_version
+        if: steps.version.outputs.type == 'check'
+        run: |
+          BASE_VERSION="${{ steps.version.outputs.base_version }}"
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          if helm pull oci://${{ env.REGISTRY }}/karectl-crates/charts/${{ env.CHART_NAME }} --version ${BASE_VERSION} 2>/dev/null; then
+            # create dev build
+            VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
+            echo "Version ${BASE_VERSION} exists, creating dev build: ${VERSION}"
+          else
+            # create release
+            VERSION="${BASE_VERSION}"
+            echo "Version ${BASE_VERSION} is new, creating release"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+      - name: Set final version
+        id: final_version
+        run: |
+          if [ -n "${{ steps.version.outputs.version }}" ]; then
+            # From tag or manual dispatch
+            VERSION="${{ steps.version.outputs.version }}"
+          else
+            # From check_version step
+            VERSION="${{ steps.check_version.outputs.version }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Final version: ${VERSION}"
+      - name: Update Chart.yaml versions
+        run: |
+          # Set both chart version and appVersion
+          sed -i "s/^version:.*/version: ${{ steps.final_version.outputs.version }}/" charts/${{ env.CHART_NAME }}/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ steps.final_version.outputs.version }}\"/" charts/${{ env.CHART_NAME }}/Chart.yaml
+          echo "Updated Chart.yaml:"
+          cat charts/${{ env.CHART_NAME }}/Chart.yaml
+      - name: Package chart
+        run: |
+          helm package charts/${{ env.CHART_NAME }} --destination .helm-packages
+      - name: Push chart to OCI registry
+        run: |
+          helm push .helm-packages/${{ env.CHART_NAME }}-${{ steps.final_version.outputs.version }}.tgz oci://${{ env.REGISTRY }}/karectl-crates/charts
+      - name: Summary
+        run: |
+          echo "## Helm Chart Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Chart:** ${{ env.CHART_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.final_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** oci://${{ env.REGISTRY }}/karectl-crates/charts/${{ env.CHART_NAME }}" >> $GITHUB_STEP_SUMMARY

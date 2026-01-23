@@ -1,0 +1,18 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named: {{ .Release.Name }}
+
+To verify the deployment:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "cr8tor-operator.name" . }}"
+
+To view the operator logs:
+
+  kubectl logs -n {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "cr8tor-operator.name" . }}" -f
+
+Prerequisites:
+  - Keycloak admin credentials secret: {{ .Values.keycloak.adminSecretName }}
+  - Realm config ConfigMap: {{ .Values.keycloak.realmConfigMapName }}
+
+For more information, visit:
+  https://github.com/karectl-crates/cr8tor
