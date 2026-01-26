@@ -38,7 +38,7 @@ keycloak:
 resources:
   requests:
     cpu: "100m"
-    memory: "256Mi"
+    memory: "128Mi"
   limits:
     cpu: "500m"
     memory: "512Mi"
@@ -51,8 +51,14 @@ affinity: {}
 # Pod & Security Settings
 podAnnotations: {}
 podLabels: {}
-podSecurityContext: {}
-securityContext: {}
+podSecurityContext:
+  runAsNonRoot: true
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
 
 # VDI templates ConfigMap
 # Set to false if you want to manage templates separately
