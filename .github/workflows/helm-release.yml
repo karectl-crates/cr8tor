@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       chart_version:
-        description: 'Chart version to release(optional)'
+        description: 'Chart version to release (optional)'
         required: false
         type: string
 env:
@@ -98,6 +98,10 @@ jobs:
           else
             # From check_version step
             VERSION="${{ steps.check_version.outputs.version }}"
+          fi
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Failed to determine chart version. No version from tag, manual input, or Chart.yaml."
+            exit 1
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Final version: ${VERSION}"
