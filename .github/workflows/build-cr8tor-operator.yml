@@ -11,12 +11,14 @@ on:
       - 'Dockerfile'
       - '.github/workflows/build-cr8tor-operator.yml'
       - 'pyproject.toml'
+      - 'charts/**'
   pull_request:
     paths:
       - 'src/cr8tor/**'
       - 'Dockerfile'
       - '.github/workflows/build-cr8tor-operator.yml'
       - 'pyproject.toml'
+      - 'charts/**'
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: karectl-crates/cr8tor-operator
