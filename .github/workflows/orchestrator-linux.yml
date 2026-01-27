@@ -82,11 +82,11 @@ jobs:
                 export SSL_CERT_FILE=$(python -m certifi)
                 
                 # run commands on target project config
-                # cd ./projects/${{ inputs.project }}
+                cd ./projects/${{ inputs.project }}
 
                 # run cr8tor create and capture the error message
                 set +e
-                errorMessage=$(cr8tor create -a GithubAction -i ./projects/${{ inputs.project }}/resources 2>&1)
+                errorMessage=$(cr8tor create -a GithubAction -i ./resources 2>&1)
                 exitCode=$?
                 set -e
 
@@ -96,7 +96,7 @@ jobs:
                 else
                   # run cr8tor validate and capture the error message
                   set +e
-                  errorMessage=$(cr8tor validate -a GithubAction -i ./projects/${{ inputs.project }}/resources 2>&1)
+                  errorMessage=$(cr8tor validate -a GithubAction -i ./resources 2>&1)
                   exitCode=$?
                   set -e
                   if [ $exitCode -ne 0 ]; then
