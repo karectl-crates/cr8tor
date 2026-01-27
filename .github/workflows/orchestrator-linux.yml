@@ -86,7 +86,7 @@ jobs:
 
                 # run cr8tor create and capture the error message
                 set +e
-                errorMessage=$(cr8tor create -a GithubAction -i ./resources 2>&1)
+                errorMessage=$(cr8tor create -a GithubAction -i ./projects/${{ inputs.project }}/resources 2>&1)
                 exitCode=$?
                 set -e
 
@@ -96,7 +96,7 @@ jobs:
                 else
                   # run cr8tor validate and capture the error message
                   set +e
-                  errorMessage=$(cr8tor validate -a GithubAction -i ./resources 2>&1)
+                  errorMessage=$(cr8tor validate -a GithubAction -i ./projects/${{ inputs.project }}/resources 2>&1)
                   exitCode=$?
                   set -e
                   if [ $exitCode -ne 0 ]; then
