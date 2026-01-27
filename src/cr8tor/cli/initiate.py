@@ -39,7 +39,15 @@ def initiate(
         str,
         typer.Option(
             "-org",
-            help="Target github organisation name",
+            help="Target github organisation name", 
+            hide_input=True,
+        ),
+    ] = None,
+    git_projects_repo: Annotated[
+        str,
+        typer.Option(
+            "-repo",
+            help="Target github projects repository name", 
             hide_input=True,
         ),
     ] = None,
@@ -91,6 +99,7 @@ def initiate(
                              This is prompted from the user if not provided.
         push_to_github (bool): Flag to indicate if the project should be pushed to GitHub. Defaults to False.
         git_org (str, optional): The target GitHub organization name. Required if `push_to_github` is True.
+        git_projects_repo (str, optional): The target projects GitHub repo name. Required if `push_to_github` is True.
         checkout (str, optional): The branch, tag, or commit to checkout from the cookiecutter template.
         project_name (str, optional): The name of the project to be created. If provided, cookiecutter will skip the prompt for other values.
         environment (str): The target environment (DEV, TEST, PROD). Defaults to "PROD".
@@ -133,6 +142,7 @@ def initiate(
     if project_name is not None:
         extra_context.update({"project_name": project_name})
         extra_context.update({"github_organization": git_org})
+        # extra_context.update({"github_projects_repo": git_projects_repo})
         try:
             project_dir = cookiecutter(
                 template_path,
@@ -140,6 +150,7 @@ def initiate(
                 extra_context=extra_context,
                 no_input=True,
             )
+
         except OutputDirExistsException as e:
             log.info("Project directory already exists. Skipping creation...")
             # Extract folder name from exception message
@@ -172,16 +183,18 @@ def initiate(
     )
     project_info = schemas.ProjectProps(**project_dict)
 
-    if push_to_github and git_org:
-        repo_name = project_info.reference
+    if push_to_github and git_org and git_projects_repo:
+        
+        log.info(f"Creating project directory {git_projects_repo} under organization {git_org} on GitHub...")
+        # project_info.reference
 
         gh_client = gh_rest_api_client.GHApiClient(git_org)
 
         # Create the repository and push the project to GitHub
-        gh_rest_api_client.create_and_push_project(gh_client, project_dir, repo_name)
+        gh_rest_api_client.create_and_push_project(gh_client, project_dir, git_projects_repo)
 
-        # Check and create contributor teams
-        gh_rest_api_client.check_and_create_teams(gh_client, repo_name)
+        # Check and create contributor teams on projects repo
+        gh_rest_api_client.check_and_create_teams(gh_client, project_name, git_projects_repo)
 
         # Create repository environments for Signing Off experience
-        gh_rest_api_client.create_github_environments(gh_client, repo_name)
+        gh_rest_api_client.create_github_environments(gh_client, git_projects_repo)
