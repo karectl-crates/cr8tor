@@ -10,6 +10,9 @@ on:
       cr8tor_branch:
          required: false
          type: string
+      project:
+         required: false
+         type: string
 
 env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
