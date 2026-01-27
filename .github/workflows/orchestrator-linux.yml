@@ -46,7 +46,7 @@ jobs:
                 git config --global user.email "${{ github.repository_owner }}-actions@github.com"
 
                 timestamp=$(date +"%Y%m%d%H%M%S")
-                branchName="temp-$timestamp-validate"
+                branchName="${{ inputs.project }}-$timestamp-validate"
                 git checkout -B $branchName
                 git push origin $branchName
                 echo "branch_name=$branchName" >> $GITHUB_OUTPUT
@@ -71,10 +71,18 @@ jobs:
               run: |
                 uv sync --directory cr8tor
 
+
             - name: Cr8tor CLI Create & Validate
               run: |
+                echo "Current working directory: $(pwd)"
+                echo "Contents of current directory:"
+                ls -l
+                
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
+                
+                # run commands on target project config
+                # cd ./projects/${{ inputs.project }}
 
                 # run cr8tor create and capture the error message
                 set +e
