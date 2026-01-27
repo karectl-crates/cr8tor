@@ -1,0 +1,17 @@
+apiVersion: v2
+name: cr8tor-operator
+description: Kubernetes operator for cr8tor to manage related resources
+type: application
+version: 0.0.1
+appVersion: "0.0.1"
+keywords:
+  - operator
+  - vdi
+  - karectl
+  - kubernetes
+home: https://github.com/karectl-crates/cr8tor
+sources:
+  - https://github.com/karectl-crates/cr8tor
+maintainers:
+  - name: karectl
+    url: https://github.com/karectl
