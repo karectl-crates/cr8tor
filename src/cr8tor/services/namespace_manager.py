@@ -240,7 +240,7 @@ def ensure_jupyter_rolebind(project_name):
             name=name,
         ),
         subjects=[
-            kubernetes.client.V1Subject(
+            kubernetes.client.RbacV1Subject(
                 kind="ServiceAccount",
                 name=JUPYTERHUB_SA_NAME,
                 namespace=JUPYTERHUB_SA_NAMESPACE,
