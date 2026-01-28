@@ -103,6 +103,60 @@ class KeycloakClientSpec(CRDSpec):
         description="Additional Keycloak client configuration",
     )
 
+class NamespaceConfig(CRDSpec):
+    """ Namespace configuration for a project."""
+
+    enabled: bool = Field(
+        default=True, description="Bool to create a dedicated namespace for this project"
+    )
+    name_prefix: str = Field(
+        default="project-", description="Prefix for the project namespace name"
+    )
+
+
+class ResourceQuotaConfig(CRDSpec):
+    """ Resource quota configuration for a project namespace."""
+
+    requests_cpu: Optional[str] = Field(
+        default="4", description="Total CPU requests allowed"
+    )
+    requests_memory: Optional[str] = Field(
+        default="8Gi", description="Total memory requests allowed"
+    )
+    limits_cpu: Optional[str] = Field(
+        default="8", description="Total CPU limits allowed"
+    )
+    limits_memory: Optional[str] = Field(
+        default="16Gi", description="Total memory limits allowed"
+    )
+    pods: Optional[str] = Field(
+        default="20", description="Maximum number of pods"
+    )
+    services: Optional[str] = Field(
+        default="10", description="Maximum number of services"
+    )
+    persistentvolumeclaims: Optional[str] = Field(
+        default="10", description="Maximum number of PVCs"
+    )
+
+
+class LimitRangeConfig(CRDSpec):
+    """ Default limit range for containers in a project namespace. """
+
+    default_cpu: Optional[str] = Field(
+        default="500m", description="Default CPU limit per container"
+    )
+    default_memory: Optional[str] = Field(
+        default="1Gi", description="Default memory limit per container"
+    )
+    default_request_cpu: Optional[str] = Field(
+        default="100m", description="Default CPU request per container"
+    )
+    default_request_memory: Optional[str] = Field(
+        default="256Mi", description="Default memory request per container"
+    )
+
+
 class AppConfig(CRDSpec):
     """Application configuration within a project."""
 
@@ -147,4 +201,16 @@ class ProjectSpec(CRDSpec):
     profiles: List[ProfileConfig] = Field(
         default_factory=list,
         description="List of workspace profiles for this project",
+    )
+    namespace: Optional[NamespaceConfig] = Field(
+        default=None,
+        description="Namespace config for project isolation",
+    )
+    resource_quota: Optional[ResourceQuotaConfig] = Field(
+        default=None,
+        description="Resource quota for the project namespace",
+    )
+    limit_range: Optional[LimitRangeConfig] = Field(
+        default=None,
+        description="Default limits for containers in the project namespace",
     )

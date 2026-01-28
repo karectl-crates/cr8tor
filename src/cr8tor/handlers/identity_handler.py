@@ -1,13 +1,21 @@
 """Module that provides the identity handler for the operator."""
 
 import kopf
+
 from cr8tor.services.user_manager import sync_keycloak_user, delete_keycloak_user
 from cr8tor.services.group_manager import sync_keycloak_group, delete_keycloak_group
 from cr8tor.services.client_manager import sync_keycloak_client, delete_keycloak_client
 from cr8tor.services.client import ensure_realm_exists
 from cr8tor.services.network_policy_manager import (
-    create_project_network_policy,
-    delete_project_network_policy,
+    create_project_network_policy
+)
+from cr8tor.services.namespace_manager import (
+    ensure_proj_namespace,
+    ensure_resource_quota,
+    ensure_limit_range,
+    ensure_jupyter_rolebind,
+    del_proj_namespace,
+    get_proj_namespace,
 )
 
 
@@ -80,22 +88,83 @@ def client_delete(body, spec, meta, **kwargs):
 @kopf.on.create("research.karectl.io", "v1alpha1", "project")
 @kopf.on.update("research.karectl.io", "v1alpha1", "project")
 @kopf.on.resume("research.karectl.io", "v1alpha1", "project")
-def project_create_update(body, spec, meta, **kwargs):
-    """Handle Project resource creation and updates.
-
-    Creates/updates:
-    - Project validation
-    - CiliumNetworkPolicy for project isolation
+def project_create_update(body, spec, meta, patch, **kwargs):
+    """ Handle Project resource creation and updates.
+        Creates/updates: Project namespace, resource quota, limitRange, jupyterHub hub role binding and cilium network policy
+        for namespace isolation.
     """
     project_name = meta["name"]
-
     description = spec.get("description", "")
     apps = spec.get("apps", [])
     profiles = spec.get("profiles", [])
 
-    # Create/update network policy for project isolation
+    # Create/update project namespace
     try:
-        policy_result = create_project_network_policy(project_name)
+        ns_result = ensure_proj_namespace(project_name, description)
+        kopf.info(
+            meta,
+            reason="NamespaceReady",
+            message=f"Namespace {ns_result['status']}: {ns_result['namespace']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="NamespaceFailed",
+            message=f"Failed to ensure namespace for {project_name}: {e}",
+        )
+        raise
+
+    # ResourceQuota
+    try:
+        quota_spec = spec.get("resource_quota") or {}
+        quota_result = ensure_resource_quota(project_name, quota_spec)
+        kopf.info(
+            meta,
+            reason="QuotaReady",
+            message=f"ResourceQuota {quota_result['status']}: {quota_result['name']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="QuotaFailed",
+            message=f"Failed to ensure quota for {project_name}: {e}",
+        )
+
+    # LimitRange
+    try:
+        limit_spec = spec.get("limit_range") or {}
+        lr_result = ensure_limit_range(project_name, limit_spec)
+        kopf.info(
+            meta,
+            reason="LimitRangeReady",
+            message=f"LimitRange {lr_result['status']}: {lr_result['name']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="LimitRangeFailed",
+            message=f"Failed to ensure limit range for {project_name}: {e}",
+        )
+
+    # JupyterHub hub service account RoleBinding
+    try:
+        rb_result = ensure_jupyter_rolebind(project_name)
+        kopf.info(
+            meta,
+            reason="RoleBindingReady",
+            message=f"Hub RoleBinding {rb_result['status']}: {rb_result['name']}",
+        )
+    except Exception as e:
+        kopf.warn(
+            meta,
+            reason="RoleBindingFailed",
+            message=f"Failed to ensure RoleBinding for {project_name}: {e}",
+        )
+
+    # CiliumNetworkPolicy in the project namespace
+    try:
+        ns_name = get_proj_namespace(project_name)
+        policy_result = create_project_network_policy(project_name, namespace=ns_name)
         kopf.info(
             meta,
             reason="NetworkPolicyCreated",
@@ -108,32 +177,38 @@ def project_create_update(body, spec, meta, **kwargs):
             message=f"Failed to create network policy for {project_name}: {e}",
         )
 
+    patch.status["namespace"] = get_proj_namespace(project_name)
     kopf.info(
         meta,
         reason="ProjectSynced",
-        message=f"Project {project_name} validated ({len(apps)} apps, {len(profiles)} profiles)",
+        message=(
+            f"Project {project_name} synced to namespace "
+            f"{get_proj_namespace(project_name)} "
+            f"({len(apps)} apps, {len(profiles)} profiles)"
+        ),
     )
 
 
 @kopf.on.delete("research.karectl.io", "v1alpha1", "project")
 def project_delete(body, spec, meta, **kwargs):
-    """Handle Project resource deletion.
+    """ Handle Project resource deletion.
+
+    Deletes the project namespace with cascading deletion. Automatically removes all
+    resources within that namespace.
     """
     project_name = meta["name"]
-
-    # Delete network policy for project
     try:
-        policy_result = delete_project_network_policy(project_name)
+        ns_result = del_proj_namespace(project_name)
         kopf.info(
             meta,
-            reason="NetworkPolicyDeleted",
-            message=f"Network policy {policy_result['status']}: {policy_result['name']}",
+            reason="NamespaceDeleted",
+            message=f"Namespace {ns_result['status']}: {ns_result['namespace']}",
         )
     except Exception as e:
         kopf.warn(
             meta,
-            reason="NetworkPolicyDeleteFailed",
-            message=f"Failed to delete network policy for {project_name}: {e}",
+            reason="NamespaceDeleteFailed",
+            message=f"Failed to delete namespace for {project_name}: {e}",
         )
 
     kopf.info(

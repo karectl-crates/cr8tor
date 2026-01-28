@@ -45,6 +45,31 @@ rules:
     resources: ["events"]
     verbs: ["create", "patch"]
 
+  # Namespace (per-project namespaces)
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Resource (per-project quotas)
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Limit (per-project defaults)
+  - apiGroups: [""]
+    resources: ["limitranges"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # PersistentVolumeClaims
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # RBAC in project namespaces
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
   # For status updates
   - apiGroups: ["identity.karectl.io", "research.karectl.io", "karectl.io"]
     resources: ["*/status"]
