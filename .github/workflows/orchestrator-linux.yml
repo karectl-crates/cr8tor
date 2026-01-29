@@ -110,6 +110,8 @@ jobs:
               run: |
                 git config --global user.name "${{ github.repository_owner }} Governance Actions"
                 git config --global user.email "${{ github.repository_owner }}-actions@github.com"
+                
+                cd ./projects/${{ inputs.project }}
 
                 echo "Contents of current directory:"
                 ls -l
@@ -131,9 +133,9 @@ jobs:
               with:
                 name: ro-crate-validated
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Send sign-off message
               run: |
@@ -167,6 +169,8 @@ jobs:
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
 
+                cd ./projects/${{ inputs.project }}
+
                 # run cr8tor sign-off and capture the error message
                 set +e
                 errorMessage=$(cr8tor sign-off -a GithubAction -i ./resources -agreement ${{ needs.Validate.outputs.pr_url }} -signing-entity "cr8-ALL-projects-approver" 2>&1)
@@ -180,6 +184,8 @@ jobs:
 
             - name: Push changes to repository
               run: |
+                cd ./projects/${{ inputs.project }}
+                
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after sign off action"
                 git push origin ${{ needs.Validate.outputs.branch_name }}
@@ -200,9 +206,9 @@ jobs:
               with:
                 name: ro-crate-signed-off
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
     Workflow-Execution:
         runs-on: ${{ inputs.environment }}-cr8tor-vm
@@ -232,7 +238,9 @@ jobs:
               run: |
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
-
+                
+                cd ./projects/${{ inputs.project }}
+                
                 # run cr8tor stage-transfer and capture the error message
                 set +e
                 errorMessage=$(cr8tor stage-transfer -a GithubAction -i ./resources 2>&1)
@@ -246,6 +254,8 @@ jobs:
 
             - name: Push changes to repo
               run: |
+                cd ./projects/${{ inputs.project }}
+                
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after staging action"
                 git push origin ${{ steps.create_branch.outputs.branch_name }}
@@ -263,9 +273,9 @@ jobs:
               with:
                 name: ro-crate-staged
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Send disclosure message
               run: |
@@ -298,6 +308,8 @@ jobs:
             run: |
               source cr8tor/.venv/bin/activate
               export SSL_CERT_FILE=$(python -m certifi)
+              
+              cd ./projects/${{ inputs.project }}
 
               # run cr8tor disclosure and capture the error message
               set +e
@@ -312,6 +324,7 @@ jobs:
 
           - name: Push changes to repository
             run: |
+              cd ./projects/${{ inputs.project }}
               git add ./bagit ./resources ./config.toml
               git commit -m "Update after sign off action"
               git push origin ${{ needs.Workflow-Execution.outputs.branch_name }}
@@ -332,9 +345,9 @@ jobs:
             with:
               name: ro-crate-disclosed
               path: |
-                  ./bagit
-                  ./resources
-                  ./config.toml
+                  ./projects/${{ inputs.project }}/bagit
+                  ./projects/${{ inputs.project }}/resources
+                  ./projects/${{ inputs.project }}/config.toml
 
     Publish:
         runs-on: ${{ inputs.environment }}-cr8tor-vm
@@ -362,6 +375,8 @@ jobs:
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
 
+                cd ./projects/${{ inputs.project }}
+
                 # run cr8tor publish and capture the error message
                 set +e
                 errorMessage=$(cr8tor publish -a GithubAction -i ./resources 2>&1)
@@ -378,12 +393,13 @@ jobs:
               with:
                 name: ro-crate-published
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Push changes to repository
               run: |
+                cd ./projects/${{ inputs.project }}
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update bagit and resources"
                 git push origin ${{ steps.create_branch.outputs.branch_name }}
