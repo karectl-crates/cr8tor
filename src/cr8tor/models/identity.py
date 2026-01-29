@@ -103,17 +103,6 @@ class KeycloakClientSpec(CRDSpec):
         description="Additional Keycloak client configuration",
     )
 
-class NamespaceConfig(CRDSpec):
-    """ Namespace configuration for a project."""
-
-    enabled: bool = Field(
-        default=True, description="Bool to create a dedicated namespace for this project"
-    )
-    name_prefix: str = Field(
-        default="project-", description="Prefix for the project namespace name"
-    )
-
-
 class ResourceQuotaConfig(CRDSpec):
     """ Resource quota configuration for a project namespace."""
 
@@ -201,10 +190,6 @@ class ProjectSpec(CRDSpec):
     profiles: List[ProfileConfig] = Field(
         default_factory=list,
         description="List of workspace profiles for this project",
-    )
-    namespace: Optional[NamespaceConfig] = Field(
-        default=None,
-        description="Namespace config for project isolation",
     )
     resource_quota: Optional[ResourceQuotaConfig] = Field(
         default=None,

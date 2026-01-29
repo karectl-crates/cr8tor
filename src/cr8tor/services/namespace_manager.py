@@ -108,7 +108,10 @@ def ensure_resource_quota(project_name, quota_config=None):
     )
 
     try:
-        api.read_namespaced_resource_quota(name=quota_name, namespace=ns_name)
+        existing_quota = api.read_namespaced_resource_quota(
+            name=quota_name, namespace=ns_name
+        )
+        quota_body.metadata.resource_version = existing_quota.metadata.resource_version
         api.replace_namespaced_resource_quota(
             name=quota_name, namespace=ns_name, body=quota_body
         )
@@ -163,7 +166,10 @@ def ensure_limit_range(project_name, limit_config=None):
     )
 
     try:
-        api.read_namespaced_limit_range(name=lr_name, namespace=ns_name)
+        existing_lr = api.read_namespaced_limit_range(
+            name=lr_name, namespace=ns_name
+        )
+        lr_body.metadata.resource_version = existing_lr.metadata.resource_version
         api.replace_namespaced_limit_range(
             name=lr_name, namespace=ns_name, body=lr_body
         )
@@ -217,7 +223,8 @@ def ensure_jupyter_rolebind(project_name):
     )
 
     try:
-        rbac_api.read_namespaced_role(name=name, namespace=ns_name)
+        existing_role = rbac_api.read_namespaced_role(name=name, namespace=ns_name)
+        role_body.metadata.resource_version = existing_role.metadata.resource_version
         rbac_api.replace_namespaced_role(name=name, namespace=ns_name, body=role_body)
         logger.info(f"Updated Role {name} in {ns_name}")
     except ApiException as e:
@@ -249,7 +256,8 @@ def ensure_jupyter_rolebind(project_name):
     )
 
     try:
-        rbac_api.read_namespaced_role_binding(name=name, namespace=ns_name)
+        existing_binding = rbac_api.read_namespaced_role_binding(name=name, namespace=ns_name)
+        binding_body.metadata.resource_version = existing_binding.metadata.resource_version
         rbac_api.replace_namespaced_role_binding(
             name=name, namespace=ns_name, body=binding_body
         )
