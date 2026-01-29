@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim
 
 # Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN groupadd -r -g 1000 appuser && useradd -r -u 1000 -g appuser appuser
 
 WORKDIR /app
 
@@ -32,7 +32,7 @@ RUN chown -R appuser:appuser /app
 COPY --from=builder --chown=appuser:appuser /app/.venv .venv
 
 # Switch to non-root user
-USER appuser
+USER 1000
 
 # Run the application
 CMD ["/app/.venv/bin/cr8tor", "operator"]
