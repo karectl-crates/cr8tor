@@ -26,7 +26,7 @@ from cr8tor.services.storage_manager import (
     ensure_workspace_pvc,
     delete_workspace_pvc,
     get_pvc_name,
-    resolve_storage_config,
+    resolve_notebook_storage_config,
 )
 
 logger = logging.getLogger(__name__)
@@ -124,7 +124,7 @@ def ensure_user_notebook_pvc(username, projects):
             namespace = get_proj_namespace(project_name)
 
             # Resolve storage config for this project
-            size, storage_class = resolve_storage_config(project_name)
+            size, storage_class = resolve_notebook_storage_config(project_name)
 
             if size is None:
                 logger.info(f"No notebook storage configured for project {project_name}, skipping PVC for {username}")

@@ -110,7 +110,7 @@ def get_project_storage_config(project_name):
         raise
 
 
-def resolve_storage_config(project_name, override_size=None, override_storage_class=None):
+def resolve_notebook_storage_config(project_name, override_size=None, override_storage_class=None):
     """ Resolve storage config for notebooks.
 
     Args:
@@ -152,7 +152,7 @@ def resolve_storage_config(project_name, override_size=None, override_storage_cl
     return final_size, storage_class
 
 
-def resolve_storage_config(vdi_spec, project_name):
+def resolve_vdi_storage_config(vdi_spec, project_name):
     """ Resolve storage config with priority chain.
 
         Priority Order: VDI > Project > Helm default

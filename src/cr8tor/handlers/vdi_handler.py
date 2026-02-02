@@ -10,7 +10,7 @@ import yaml
 import jinja2
 
 from cr8tor.services.storage_manager import (
-    resolve_storage_config,
+    resolve_vdi_storage_config,
     resolve_scheduling_config,
     ensure_workspace_pvc,
     delete_workspace_pvc,
@@ -172,7 +172,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
 
     # Resolve storage config (VDI > Project > Helm, capped by Helm max)
     pvc_name = None
-    storage_size, storage_class, persist, pvc_enabled = resolve_storage_config(spec, project)
+    storage_size, storage_class, persist, pvc_enabled = resolve_vdi_storage_config(spec, project)
 
     if pvc_enabled:
         pvc_name = get_pvc_name("vdi", user, project)
