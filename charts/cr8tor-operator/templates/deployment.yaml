@@ -80,6 +80,9 @@ spec:
                 configMapKeyRef:
                   name: {{ .Values.keycloak.realmConfigMapName }}
                   key: keycloak-verify-tls
+            # Identity namespace (where User/Group CRDs are stored)
+            - name: IDENTITY_NAMESPACE
+              value: {{ .Values.identity.namespace | quote }}
             # Storage configuration
             - name: STORAGE_DEFAULT_STORAGE_CLASS
               value: {{ .Values.storage.defaultStorageClass | quote }}

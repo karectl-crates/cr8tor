@@ -34,6 +34,10 @@ keycloak:
   adminSecretName: "keycloak-admin-credentials"
   realmConfigMapName: "karectl-realm-config"
 
+# Identity namespace where User/Group CRDs are stored
+identity:
+  namespace: "keycloak"
+
 # Resource limits and requests
 resources:
   requests:
