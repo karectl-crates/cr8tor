@@ -98,6 +98,10 @@ def ensure_resource_quota(project_name, quota_config=None):
         "persistentvolumeclaims": quota_config.get("persistentvolumeclaims", "10"),
     }
 
+    # Add storage quota if specified
+    if quota_config.get("requests_storage"):
+        hard["requests.storage"] = quota_config.get("requests_storage")
+
     quota_body = kubernetes.client.V1ResourceQuota(
         metadata=kubernetes.client.V1ObjectMeta(
             name=quota_name,

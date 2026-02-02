@@ -9,6 +9,14 @@ import datetime
 import yaml
 import jinja2
 
+from cr8tor.services.storage_manager import (
+    resolve_storage_config,
+    resolve_scheduling_config,
+    ensure_workspace_pvc,
+    delete_workspace_pvc,
+    get_pvc_name,
+)
+
 
 def patch_kopf_filter():
     """Patch the specific filter method that's causing the TypeError"""
@@ -89,10 +97,13 @@ def ensure_init_scripts_configmap(namespace):
 
 
 def render_pod_template(
-    name, namespace, user, project, image, connection, password, linux_user, env_vars=None
+    name, namespace, user, project, image, connection, password, linux_user,
+    env_vars=None, pvc_name=None, scheduling=None
 ):
     if env_vars is None:
         env_vars = []
+    if scheduling is None:
+        scheduling = {}
 
     env = jinja2.Environment(
         loader=jinja2.FileSystemLoader("/app/templates"),
@@ -110,6 +121,8 @@ def render_pod_template(
         connection=connection,
         linux_user=linux_user,
         env_vars=env_vars,
+        pvc_name=pvc_name,
+        scheduling=scheduling,
     )
 
 
@@ -157,8 +170,40 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
 
     print(f"About to patch status: {dict(patch.status)}", flush=True)
 
+    # Resolve storage config (VDI > Project > Helm, capped by Helm max)
+    pvc_name = None
+    storage_size, storage_class, persist, pvc_enabled = resolve_storage_config(spec, project)
+
+    if pvc_enabled:
+        pvc_name = get_pvc_name("vdi", user, project)
+        print(f"Storage enabled: size={storage_size}, class={storage_class}, persist={persist}", flush=True)
+
+        # Create PVC for persistent home directory
+        pvc_labels = {
+            "karectl.io/user": user,
+            "karectl.io/project": project,
+            "karectl.io/workspace-type": "vdi",
+        }
+        pvc_result = ensure_workspace_pvc(namespace, pvc_name, storage_size, storage_class, pvc_labels)
+        print(f"PVC {pvc_result['status']}: {pvc_name}", flush=True)
+
+        # Store storage info in status
+        patch.status["storage"] = {
+            "pvcName": pvc_name,
+            "size": storage_size,
+            "storageClass": storage_class,
+            "persist": persist,
+        }
+    else:
+        print("Storage not configured, using emptyDir", flush=True)
+
+    # Resolve scheduling config
+    scheduling = resolve_scheduling_config(spec, project)
+    if scheduling.get("node_selector") or scheduling.get("tolerations"):
+        print(f"Scheduling config: nodeSelector={scheduling.get('node_selector')}, tolerations={len(scheduling.get('tolerations', []))} items", flush=True)
+
     pod_yaml = render_pod_template(
-        name, namespace, user, project, image, connection, generated_password, linux_user, env_vars
+        name, namespace, user, project, image, connection, generated_password, linux_user, env_vars, pvc_name, scheduling
     )
 
     resources = list(yaml.safe_load_all(pod_yaml))
@@ -208,7 +253,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
 
 
 @kopf.on.delete("karectl.io", "v1alpha1", "vdiinstances")
-def delete_vdi(spec, name, namespace, patch, **kwargs):
+def delete_vdi(spec, name, namespace, patch, body, **kwargs):
     print(f"Deleting VDI: {name}", flush=True)
     user = spec["user"]
     project = spec["project"]
@@ -233,6 +278,19 @@ def delete_vdi(spec, name, namespace, patch, **kwargs):
     except ApiException as e:
         if e.status != 404:
             print(f"Failed to delete service {service_name}: {e}", flush=True)
+
+    # Handle PVC cleanup
+    status = body.get("status", {})
+    storage_status = status.get("storage", {})
+    if storage_status.get("pvcName"):
+        pvc_name = storage_status["pvcName"]
+        persist = storage_status.get("persist", False)
+
+        if persist:
+            print(f"PVC {pvc_name} retained", flush=True)
+        else:
+            pvc_result = delete_workspace_pvc(namespace, pvc_name)
+            print(f"PVC {pvc_result['status']}: {pvc_name}", flush=True)
 
     patch.status["phase"] = "Terminated"
 

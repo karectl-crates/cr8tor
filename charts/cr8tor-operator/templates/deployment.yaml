@@ -80,6 +80,27 @@ spec:
                 configMapKeyRef:
                   name: {{ .Values.keycloak.realmConfigMapName }}
                   key: keycloak-verify-tls
+            # Storage configuration
+            - name: STORAGE_DEFAULT_STORAGE_CLASS
+              value: {{ .Values.storage.defaultStorageClass | quote }}
+            {{- if .Values.storage.defaultVdiSize }}
+            - name: STORAGE_DEFAULT_VDI_SIZE
+              value: {{ .Values.storage.defaultVdiSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.defaultNotebookSize }}
+            - name: STORAGE_DEFAULT_NOTEBOOK_SIZE
+              value: {{ .Values.storage.defaultNotebookSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.maxVdiSize }}
+            - name: STORAGE_MAX_VDI_SIZE
+              value: {{ .Values.storage.maxVdiSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.maxNotebookSize }}
+            - name: STORAGE_MAX_NOTEBOOK_SIZE
+              value: {{ .Values.storage.maxNotebookSize | quote }}
+            {{- end }}
+            - name: STORAGE_DEFAULT_PERSIST
+              value: {{ .Values.storage.defaultPersist | quote }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
             - name: vdi-templates
