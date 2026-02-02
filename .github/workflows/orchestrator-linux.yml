@@ -47,11 +47,16 @@ jobs:
 
                 timestamp=$(date +"%Y%m%d%H%M%S")
                 branchName="${{ inputs.project }}-$timestamp-validate"
+
+                git fetch origin main
+                git reset --hard origin/main
+                git clean -fdx
+
                 git checkout -B $branchName
                 git push origin $branchName
                 echo "branch_name=$branchName" >> $GITHUB_OUTPUT
                 echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
-
+ 
             - name: Setup uv
               uses: astral-sh/setup-uv@v5
               with:
