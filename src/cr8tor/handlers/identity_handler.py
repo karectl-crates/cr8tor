@@ -241,6 +241,8 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
         Provision notebook PVCs for the projects the user has access to.
     """
     username = spec["username"]
+    user_groups = spec.get("groups", [])
+
     ensure_realm_exists()
     result = sync_keycloak_user(username, spec)
 
