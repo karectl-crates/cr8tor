@@ -104,6 +104,11 @@ spec:
             {{- end }}
             - name: STORAGE_DEFAULT_PERSIST
               value: {{ .Values.storage.defaultPersist | quote }}
+            # Project Sync Plugin Configuration
+            - name: CRTOR_DEFAULT_QUOTA_TIER
+              value: {{ .Values.projectSync.defaultQuotaTier | quote }}
+            - name: CRTOR_TARGET_NAMESPACE
+              value: {{ .Values.projectSync.targetNamespace | quote }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
             - name: vdi-templates

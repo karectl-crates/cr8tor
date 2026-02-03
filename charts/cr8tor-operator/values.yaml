@@ -85,3 +85,10 @@ storage:
   maxNotebookSize: ""
   # Default persist behavior (false = delete PVC on VDI delete)
   defaultPersist: false
+
+# Project Sync Plugin Configuration
+projectSync:
+  # Default quota tier (small/medium/large)
+  defaultQuotaTier: medium
+  # Target namespace for CRDs
+  targetNamespace: keycloak

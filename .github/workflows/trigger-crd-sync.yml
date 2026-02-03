@@ -1,0 +1,114 @@
+name: Trigger CRD Sync After Publish
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        description: 'Project name to sync CRDs for'
+        required: true
+        type: string
+
+jobs:
+  trigger-crd-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cr8tor-projects
+        uses: actions/checkout@v4
+        with:
+          repository: karectl-crates/cr8tor-projects
+          path: cr8tor-projects
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install toml
+
+      - name: Parse project data and trigger sync
+        run: |
+          echo "Parsing project data for: ${{ inputs.project }}"
+
+          # Parse TOML
+          python3 <<'PYTHON_SCRIPT'
+          import toml
+          import json
+          from pathlib import Path
+
+          project_name = "${{ inputs.project }}"
+          project_dir = Path(f"cr8tor-projects/projects/{project_name}")
+
+          # Getting all locations
+          toml_path = project_dir / "resources" / "governance" / "project.toml"
+          if not toml_path.exists():
+              toml_path = project_dir / "bagit" / "data" / "governance" / "project.toml"
+
+          if not toml_path.exists():
+              raise FileNotFoundError(f"project.toml not found for {project_name}")
+
+          project_data = toml.load(toml_path)
+          with open("project_data.json", "w") as f:
+              json.dump(project_data, f, indent=2)
+
+          print(f"Parsed project data for {project_name}")
+          PYTHON_SCRIPT
+
+          # Create ConfigMap to share
+          PROJECT_DATA=$(cat project_data.json)
+
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: project-sync-trigger-$(date +%s)
+            namespace: cr8tor
+            labels:
+              karectl.io/trigger: project-sync
+              karectl.io/project: ${{ inputs.project }}
+          data:
+            project_data: |
+              ${PROJECT_DATA}
+            triggered_at: "$(date -Iseconds)"
+            triggered_by: "github-actions"
+          EOF
+
+          echo "CRD sync triggered for ${{ inputs.project }}"
+
+      - name: Wait for sync to complete
+        run: |
+          echo "Waiting 30 seconds for operator to process..."
+          sleep 30
+
+      - name: Verify CRDs created
+        run: |
+          PROJECT_NAME=$(echo "${{ inputs.project }}" | sed 's/^cr8-//')
+
+          echo "Checking for created resources..."
+
+          # Check Project CRD
+          if kubectl get project "$PROJECT_NAME" -n keycloak &>/dev/null; then
+            echo "Project CRD created: $PROJECT_NAME"
+          else
+            echo "Project CRD not found: $PROJECT_NAME"
+          fi
+
+          # Check Groups
+          if kubectl get group "$PROJECT_NAME" -n keycloak &>/dev/null; then
+            echo "Parent Group created: $PROJECT_NAME"
+          fi
+          if kubectl get group "${PROJECT_NAME}-admin" -n keycloak &>/dev/null; then
+            echo "Admin Group created: ${PROJECT_NAME}-admin"
+          fi
+          if kubectl get group "${PROJECT_NAME}-analyst" -n keycloak &>/dev/null; then
+            echo "Analyst Group created: ${PROJECT_NAME}-analyst"
+          fi
+
+          # Check Namespace
+          if kubectl get namespace "$PROJECT_NAME" &>/dev/null; then
+            echo "Namespace created: $PROJECT_NAME"
+          else
+            echo "Namespace not found: $PROJECT_NAME"
+          fi
+          echo "Sync Completed..."
