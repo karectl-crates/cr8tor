@@ -30,6 +30,19 @@ class UserSpec(CRDSpec):
     )
 
 
+class GiteaTeamConfig(CRDSpec):
+    """Gitea team configuration for a group."""
+
+    team_name: Optional[str] = Field(
+        default=None,
+        description="Team name in Gitea organisations",
+    )
+    permission: str = Field(
+        default="write",
+        description="Team permission level: read, write, or admin",
+    )
+
+
 @CRDRegistry.register("identity.karectl.io", "v1alpha1", "Group", "groups")
 class GroupSpec(CRDSpec):
     """Group CRD specification."""
@@ -51,6 +64,10 @@ class GroupSpec(CRDSpec):
     subgroups: List[str] = Field(
         default_factory=list,
         description="List of subgroups belonging to this group",
+    )
+    gitea: Optional[GiteaTeamConfig] = Field(
+        default=None,
+        description="Gitea team configuration for this group",
     )
 
 
@@ -237,6 +254,27 @@ class ProfileConfig(CRDSpec):
         default=None, description="Kubespawner-specific overrides"
     )
 
+class GiteaOrgConfig(CRDSpec):
+    """Gitea organisation configuration for a project."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable Gitea provisioning",
+    )
+    visibility: str = Field(
+        default="private",
+        description="Organisation visibility: private, limited, or public",
+    )
+    create_template_repo: bool = Field(
+        default=True,
+        description="Create template repository on organisation creation",
+    )
+    default_repo_permission: str = Field(
+        default="read",
+        description="Default repository permission for organisation members",
+    )
+
+
 @CRDRegistry.register("research.karectl.io", "v1alpha1", "Project", "projects")
 class ProjectSpec(CRDSpec):
     """Project CRD specification for research projects."""
@@ -265,4 +303,8 @@ class ProjectSpec(CRDSpec):
     scheduling: Optional[SchedulingConfig] = Field(
         default=None,
         description="Scheduling configuration for workspace pods",
+    )
+    gitea: Optional[GiteaOrgConfig] = Field(
+        default=None,
+        description="Gitea organisation configuration for the project",
     )

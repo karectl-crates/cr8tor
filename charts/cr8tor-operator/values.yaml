@@ -28,11 +28,14 @@ config:
   manageCrds: "true"
   generateCrdFiles: "false"
 
+# Services configuration
+# Single ConfigMap for all external services
+servicesConfigMapName: "cr8tor-operator-services-config"
+
 # Keycloak Config
 keycloak:
-  # Secret and config containing admin credentials & realm details
+  # Secret containing admin credentials
   adminSecretName: "keycloak-admin-credentials"
-  realmConfigMapName: "karectl-realm-config"
 
 # Identity namespace where User/Group CRDs are stored
 identity:
@@ -92,3 +95,11 @@ projectSync:
   defaultQuotaTier: medium
   # Target namespace for CRDs
   targetNamespace: keycloak
+
+# Gitea integration configuration
+# Enables organisation/team provisioning
+gitea:
+  # Set to true to enable Gitea integration
+  enabled: false
+  # Secret for gitea admin API token
+  adminSecretName: "gitea-api-credentials"
