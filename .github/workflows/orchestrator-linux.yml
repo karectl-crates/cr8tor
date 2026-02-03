@@ -131,6 +131,29 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the validated ro-crate details" \
                   --body "Update main repository for the validated ro-crate details")
+                
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+        
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
+                
                 echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
 
             - name: Create artifact for validated RO-Crate
@@ -194,6 +217,7 @@ jobs:
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after sign off action"
                 git push origin ${{ needs.Validate.outputs.branch_name }}
+
 
             - name: Merge Pull Request and delete temp branch
               run: |
@@ -271,6 +295,29 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the staged ro-crate details" \
                   --body "Update main repository for the staged ro-crate details")
+
+
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
+
                 echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
 
             - name: Create artifact for staged RO-Crate
@@ -415,6 +462,27 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the published ro-crate details" \
                   --body "Update main repository for the published ro-crate details")
+
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
 
             - name: Merge Pull Request and delete temp branch
               run: |

@@ -163,16 +163,6 @@ def create_and_push_project(
         )
         return
 
-    # Step 2: Create a new repository under the organization
-    # response = gh_client.create_repository(repo_name)
-    # if response:
-    #     log.info(
-    #         f"GitHub repository '{gh_client.git_org}/{repo_name}' created successfully."
-    #     )
-    # else:
-    #     raise ValueError(f"Failed to create GitHub repository: {response}")
-
-
     # Step 3: Initialize git, add, commit and push the local project
     try:
 
@@ -183,6 +173,11 @@ def create_and_push_project(
             log.info(f"Cloned {repo_name} to temporary directory: {temp_dir} ")
             
             project_name = Path(project_dir).name
+            
+            branch_name = f"add-project-{project_name}"
+            repo.git.checkout("-b", branch_name)
+            log.info(f"Created and checked out branch: {branch_name}")
+            
             dest_projects_folder = Path(temp_dir) / "projects" / project_name
             dest_projects_folder.parent.mkdir(parents=True, exist_ok=True)
             
@@ -204,49 +199,54 @@ def create_and_push_project(
 
                 repo.index.add([str(codeowners_path.relative_to(temp_dir))])
                 repo.index.commit(f"Add CODEOWNERS rule for {project_name}")
-
-                origin = repo.remote("origin")
-                origin.push()
-
-                log.info(f"CODEOWNERS updated and pushed for {project_name}.")
+                log.info(f"CODEOWNERS updated for {project_name}.")
        
             else:
                 log.info(f"Rule already present for {project_name}. No change made.")
-
 
             shutil.copytree(project_dir, dest_projects_folder)
             log.info(f"Copied project to projects/{project_name}")
             
             repo.index.add([f"projects/{project_name}"])
             repo.index.commit(f"Add new cr8tor project: {project_name}")
-            repo.remote("origin").push()
-            log.info(f"Pushed project {project_name} to {repo_name}")
+            
+            origin = repo.remote("origin")
+            origin.push(refspec=f"{branch_name}:{branch_name}")
+            log.info(f"Pushed branch {branch_name} to {repo_name}")
 
-        # repo = git.Repo.init(project_dir)
-        # repo.git.checkout("-b", "main")  # Ensure 'main' branch exists
-        # repo.git.add(A=True)
-        # repo.index.commit("Initial commit")
+            pr_response = create_pull_request(
+                gh_client, 
+                repo_name, 
+                branch_name, 
+                "main",
+                f"Add new cr8tor project: {project_name}",
+                f"This PR adds the new project `{project_name}` created by cr8tor.\n\nChanges include:\n- Project files in `projects/{project_name}`\n- Updated CODEOWNERS"
+            )
+            
+            if pr_response:
+                log.info(f"Pull request created: {pr_response.get('html_url')}")
+            else:
+                log.warning("Failed to create pull request")
 
-        # auth_repo_url = f"https://{os.getenv('GH_TOKEN')}@github.com/{gh_client.git_org}/{repo_name}.git"
-        # repo.create_remote("origin", auth_repo_url)
-        # repo.git.push("--set-upstream", "origin", "main")
-        # log.info(
-        #     f"Project pushed to GitHub repository '{gh_client.git_org}/{repo_name}'."
-        # )
     except Exception as e:
         raise ValueError(f"An error occurred while pushing to GitHub: {e}")
 
-    # Step 4: Apply the rule set for the repository
-    # project_repo_ruleset_path = Path(project_dir).joinpath(
-    #     ".github", "branch_rules", "protect_main.json"
-    # )
-    # with project_repo_ruleset_path.open("r") as f:
-    #     project_repo_ruleset = json.load(f)
-    # response = gh_client.create_repo_ruleset(repo_name, project_repo_ruleset)
-    # if response:
-    #     log.info(f"Rule set applied for {repo_name}")
-    # else:
-    #     raise ValueError(f"Failed to apply Repo rulesets: {response}")
+
+
+def create_pull_request(self, repo_name, head_branch, base_branch, title, body):
+    # https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#create-a-pull-request
+    endpoint = f"repos/{self.git_org}/{repo_name}/pulls"
+    
+    payload = {
+        "title": title,
+        "body": body,
+        "head": head_branch,
+        "base": base_branch,
+    }
+    
+    response = self.post(endpoint, json=payload)
+    response.raise_for_status()
+    return response.json() if response.ok else None
 
 
 def check_and_create_teams(
