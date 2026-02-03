@@ -34,6 +34,10 @@ keycloak:
   adminSecretName: "keycloak-admin-credentials"
   realmConfigMapName: "karectl-realm-config"
 
+# Identity namespace where User/Group CRDs are stored
+identity:
+  namespace: "keycloak"
+
 # Resource limits and requests
 resources:
   requests:
@@ -64,3 +68,20 @@ securityContext:
 # Set to false if you want to manage templates separately
 vdiTemplates:
   enabled: true
+
+# Storage configuration for workspaces (VDI/notebooks)
+# These act as cluster-level defaults and caps
+storage:
+  # Default storage class, leave empty to use cluster default StorageClass
+  defaultStorageClass: ""
+  # Default VDI size (used if Project CRD doesn't specify)
+  defaultVdiSize: ""
+  # Default notebook size (used if Project CRD doesn't specify)
+  defaultNotebookSize: ""
+
+  # Maximum VDI size (leave empty for no cap, Project CRD values are then respected)
+  maxVdiSize: ""
+  # Maximum notebook size (leave empty for no cap, Project CRD values are then respected)
+  maxNotebookSize: ""
+  # Default persist behavior (false = delete PVC on VDI delete)
+  defaultPersist: false
