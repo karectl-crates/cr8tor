@@ -1,0 +1,60 @@
+# cr8tor-operator Helm chart values
+
+image:
+  registry: ghcr.io
+  repository: karectl-crates/cr8tor-operator
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+replicaCount: 1
+
+# Service and RBAC settings
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+rbac:
+  create: true
+
+# Operator Config
+config:
+  logLevel: "INFO"
+  workerLimit: "5"
+  postingEnabled: "false"
+  serverTimeout: "60"
+  manageCrds: "true"
+  generateCrdFiles: "false"
+
+# Keycloak Config
+keycloak:
+  # Secret and config containing admin credentials & realm details
+  adminSecretName: "keycloak-admin-credentials"
+  realmConfigMapName: "karectl-realm-config"
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+# Node/Affinity Settings
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Pod & Security Settings
+podAnnotations: {}
+podLabels: {}
+podSecurityContext: {}
+securityContext: {}
+
+# VDI templates ConfigMap
+# Set to false if you want to manage templates separately
+vdiTemplates:
+  enabled: true
