@@ -10,6 +10,9 @@ on:
       cr8tor_branch:
          required: false
          type: string
+      project:
+         required: false
+         type: string
 
 env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,12 +46,17 @@ jobs:
                 git config --global user.email "${{ github.repository_owner }}-actions@github.com"
 
                 timestamp=$(date +"%Y%m%d%H%M%S")
-                branchName="temp-$timestamp-validate"
+                branchName="${{ inputs.project }}-$timestamp-validate"
+
+                git fetch origin main
+                git reset --hard origin/main
+                git clean -fdx
+
                 git checkout -B $branchName
                 git push origin $branchName
                 echo "branch_name=$branchName" >> $GITHUB_OUTPUT
                 echo "timestamp=$timestamp" >> $GITHUB_OUTPUT
-
+ 
             - name: Setup uv
               uses: astral-sh/setup-uv@v5
               with:
@@ -68,10 +76,18 @@ jobs:
               run: |
                 uv sync --directory cr8tor
 
+
             - name: Cr8tor CLI Create & Validate
               run: |
+                echo "Current working directory: $(pwd)"
+                echo "Contents of current directory:"
+                ls -l
+                
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
+                
+                # run commands on target project config
+                cd ./projects/${{ inputs.project }}
 
                 # run cr8tor create and capture the error message
                 set +e
@@ -99,6 +115,11 @@ jobs:
               run: |
                 git config --global user.name "${{ github.repository_owner }} Governance Actions"
                 git config --global user.email "${{ github.repository_owner }}-actions@github.com"
+                
+                cd ./projects/${{ inputs.project }}
+
+                echo "Contents of current directory:"
+                ls -l
 
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after create and validate action"
@@ -110,6 +131,29 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the validated ro-crate details" \
                   --body "Update main repository for the validated ro-crate details")
+                
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+        
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
+                
                 echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
 
             - name: Create artifact for validated RO-Crate
@@ -117,9 +161,9 @@ jobs:
               with:
                 name: ro-crate-validated
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Send sign-off message
               run: |
@@ -153,6 +197,8 @@ jobs:
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
 
+                cd ./projects/${{ inputs.project }}
+
                 # run cr8tor sign-off and capture the error message
                 set +e
                 errorMessage=$(cr8tor sign-off -a GithubAction -i ./resources -agreement ${{ needs.Validate.outputs.pr_url }} -signing-entity "cr8-ALL-projects-approver" 2>&1)
@@ -166,9 +212,12 @@ jobs:
 
             - name: Push changes to repository
               run: |
+                cd ./projects/${{ inputs.project }}
+                
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after sign off action"
                 git push origin ${{ needs.Validate.outputs.branch_name }}
+
 
             - name: Merge Pull Request and delete temp branch
               run: |
@@ -186,9 +235,9 @@ jobs:
               with:
                 name: ro-crate-signed-off
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
     Workflow-Execution:
         runs-on: ${{ inputs.environment }}-cr8tor-vm
@@ -218,7 +267,9 @@ jobs:
               run: |
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
-
+                
+                cd ./projects/${{ inputs.project }}
+                
                 # run cr8tor stage-transfer and capture the error message
                 set +e
                 errorMessage=$(cr8tor stage-transfer -a GithubAction -i ./resources 2>&1)
@@ -232,6 +283,8 @@ jobs:
 
             - name: Push changes to repo
               run: |
+                cd ./projects/${{ inputs.project }}
+                
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update after staging action"
                 git push origin ${{ steps.create_branch.outputs.branch_name }}
@@ -242,6 +295,29 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the staged ro-crate details" \
                   --body "Update main repository for the staged ro-crate details")
+
+
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
+
                 echo "pr_url=$pr_url" >> $GITHUB_OUTPUT
 
             - name: Create artifact for staged RO-Crate
@@ -249,9 +325,9 @@ jobs:
               with:
                 name: ro-crate-staged
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Send disclosure message
               run: |
@@ -284,6 +360,8 @@ jobs:
             run: |
               source cr8tor/.venv/bin/activate
               export SSL_CERT_FILE=$(python -m certifi)
+              
+              cd ./projects/${{ inputs.project }}
 
               # run cr8tor disclosure and capture the error message
               set +e
@@ -298,6 +376,7 @@ jobs:
 
           - name: Push changes to repository
             run: |
+              cd ./projects/${{ inputs.project }}
               git add ./bagit ./resources ./config.toml
               git commit -m "Update after sign off action"
               git push origin ${{ needs.Workflow-Execution.outputs.branch_name }}
@@ -318,9 +397,9 @@ jobs:
             with:
               name: ro-crate-disclosed
               path: |
-                  ./bagit
-                  ./resources
-                  ./config.toml
+                  ./projects/${{ inputs.project }}/bagit
+                  ./projects/${{ inputs.project }}/resources
+                  ./projects/${{ inputs.project }}/config.toml
 
     Publish:
         runs-on: ${{ inputs.environment }}-cr8tor-vm
@@ -348,6 +427,8 @@ jobs:
                 source cr8tor/.venv/bin/activate
                 export SSL_CERT_FILE=$(python -m certifi)
 
+                cd ./projects/${{ inputs.project }}
+
                 # run cr8tor publish and capture the error message
                 set +e
                 errorMessage=$(cr8tor publish -a GithubAction -i ./resources 2>&1)
@@ -364,12 +445,13 @@ jobs:
               with:
                 name: ro-crate-published
                 path: |
-                    ./bagit
-                    ./resources
-                    ./config.toml
+                    ./projects/${{ inputs.project }}/bagit
+                    ./projects/${{ inputs.project }}/resources
+                    ./projects/${{ inputs.project }}/config.toml
 
             - name: Push changes to repository
               run: |
+                cd ./projects/${{ inputs.project }}
                 git add ./bagit ./resources ./config.toml
                 git commit -m "Update bagit and resources"
                 git push origin ${{ steps.create_branch.outputs.branch_name }}
@@ -380,6 +462,27 @@ jobs:
                 pr_url=$(gh pr create --base main --head ${{ steps.create_branch.outputs.branch_name }} \
                   --title "Update main repository for the published ro-crate details" \
                   --body "Update main repository for the published ro-crate details")
+
+                pr_number=$(echo "$pr_url" | awk -F'/' '{print $NF}')
+                echo $pr_number
+
+                echo "Waiting for PR #$pr_number to be ready for merge..."
+                for i in {1..30}; do
+                  mergeable=$(gh pr view $pr_number --json mergeable --jq .mergeable)
+                  echo "Attempt $i/30: mergeable state is $mergeable"
+                  
+                  if [ "$mergeable" = "MERGEABLE" ]; then
+                    echo "PR is ready to merge"
+                    break
+                  fi
+                  
+                  if [ $i -eq 30 ]; then
+                    echo "::error::PR did not become mergeable after 5 minutes"
+                    exit 1
+                  fi
+                  
+                  sleep 10
+                done
 
             - name: Merge Pull Request and delete temp branch
               run: |

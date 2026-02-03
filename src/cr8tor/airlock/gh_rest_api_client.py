@@ -6,6 +6,8 @@ import os
 import git
 import json
 import time
+import tempfile
+import shutil
 
 from cr8tor.utils import log
 
@@ -151,60 +153,106 @@ def create_and_push_project(
 
     """
 
-    # Step 1: Check if the repository already exists
+    # Step 1: Check if target projects repo exists
     response = gh_client.get_repository(repo_name)
 
-    if response:
+    if response is None:
         # Repository already exists, skip creation
         log.info(
-            f"GitHub repository '{gh_client.git_org}/{repo_name}' already exists. Skipping creation..."
+            f"GitHub repository '{gh_client.git_org}/{repo_name}' doesn't exist. Killing project initiation..."
         )
         return
 
-    # Step 2: Create a new repository under the organization
-    response = gh_client.create_repository(repo_name)
-
-    if response:
-        log.info(
-            f"GitHub repository '{gh_client.git_org}/{repo_name}' created successfully."
-        )
-    else:
-        raise ValueError(f"Failed to create GitHub repository: {response}")
-
     # Step 3: Initialize git, add, commit and push the local project
     try:
-        repo = git.Repo.init(project_dir)
-        repo.git.checkout("-b", "main")  # Ensure 'main' branch exists
-        repo.git.add(A=True)
-        repo.index.commit("Initial commit")
 
-        auth_repo_url = f"https://{os.getenv('GH_TOKEN')}@github.com/{gh_client.git_org}/{repo_name}.git"
-        repo.create_remote("origin", auth_repo_url)
-        repo.git.push("--set-upstream", "origin", "main")
-        log.info(
-            f"Project pushed to GitHub repository '{gh_client.git_org}/{repo_name}'."
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            auth_url = f"https://{os.getenv('GH_TOKEN')}@github.com/{gh_client.git_org}/{repo_name}.git"
+  
+            repo = git.Repo.clone_from(auth_url, temp_dir, branch="main")
+            log.info(f"Cloned {repo_name} to temporary directory: {temp_dir} ")
+            
+            project_name = Path(project_dir).name
+            
+            branch_name = f"add-project-{project_name}"
+            repo.git.checkout("-b", branch_name)
+            log.info(f"Created and checked out branch: {branch_name}")
+            
+            dest_projects_folder = Path(temp_dir) / "projects" / project_name
+            dest_projects_folder.parent.mkdir(parents=True, exist_ok=True)
+            
+            rule_line = f"/projects/{project_name} @lsc-sde-crates/devops_admin\n" # TODO: Variabilize team
+            github_dir = Path(temp_dir) / ".github"
+            codeowners_path = github_dir / "CODEOWNERS"
+            github_dir.mkdir(exist_ok=True)
+
+            if codeowners_path.exists():
+                codeowners_file = codeowners_path.read_text()
+            else:
+                codeowners_file = ""
+
+            if rule_line.strip() not in codeowners_file:
+                with open(codeowners_path, "a", encoding="utf-8") as f:
+                    if codeowners_file and not codeowners_file.endswith("\n"):
+                        f.write("\n")
+                    f.write(rule_line)
+
+                repo.index.add([str(codeowners_path.relative_to(temp_dir))])
+                repo.index.commit(f"Add CODEOWNERS rule for {project_name}")
+                log.info(f"CODEOWNERS updated for {project_name}.")
+       
+            else:
+                log.info(f"Rule already present for {project_name}. No change made.")
+
+            shutil.copytree(project_dir, dest_projects_folder)
+            log.info(f"Copied project to projects/{project_name}")
+            
+            repo.index.add([f"projects/{project_name}"])
+            repo.index.commit(f"Add new cr8tor project: {project_name}")
+            
+            origin = repo.remote("origin")
+            origin.push(refspec=f"{branch_name}:{branch_name}")
+            log.info(f"Pushed branch {branch_name} to {repo_name}")
+
+            pr_response = create_pull_request(
+                gh_client, 
+                repo_name, 
+                branch_name, 
+                "main",
+                f"Add new cr8tor project: {project_name}",
+                f"This PR adds the new project `{project_name}` created by cr8tor.\n\nChanges include:\n- Project files in `projects/{project_name}`\n- Updated CODEOWNERS"
+            )
+            
+            if pr_response:
+                log.info(f"Pull request created: {pr_response.get('html_url')}")
+            else:
+                log.warning("Failed to create pull request")
+
     except Exception as e:
         raise ValueError(f"An error occurred while pushing to GitHub: {e}")
 
-    # Step 4: Apply the rule set for the repository
-    project_repo_ruleset_path = Path(project_dir).joinpath(
-        ".github", "branch_rules", "protect_main.json"
-    )
-    with project_repo_ruleset_path.open("r") as f:
-        project_repo_ruleset = json.load(f)
 
-    response = gh_client.create_repo_ruleset(repo_name, project_repo_ruleset)
 
-    if response:
-        log.info(f"Rule set applied for {repo_name}")
-    else:
-        raise ValueError(f"Failed to apply Repo rulesets: {response}")
+def create_pull_request(self, repo_name, head_branch, base_branch, title, body):
+    # https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#create-a-pull-request
+    endpoint = f"repos/{self.git_org}/{repo_name}/pulls"
+    
+    payload = {
+        "title": title,
+        "body": body,
+        "head": head_branch,
+        "base": base_branch,
+    }
+    
+    response = self.post(endpoint, json=payload)
+    response.raise_for_status()
+    return response.json() if response.ok else None
 
 
 def check_and_create_teams(
     gh_client: GHApiClient,
-    repo_name: str,
+    project_name: str,
+    projects_repo_name: str,
 ) -> None:
     """
 
@@ -216,7 +264,7 @@ def check_and_create_teams(
 
     """
 
-    contributor_team = f"{repo_name}-contributor"
+    contributor_team = f"{project_name}-contributor"
     # there is currently a single approver team for all projects
     approver_team = "cr8-ALL-projects-approver"
     devops_admin_team = "devops_admin"
@@ -226,7 +274,7 @@ def check_and_create_teams(
 
     if not team_slug:
         team_slug = gh_client.create_team(
-            contributor_team, f"Team for contributor members for project {repo_name}"
+            contributor_team, f"Team for contributor members for project {project_name}"
         )["slug"]
         log.info(f"Created team {contributor_team}")
 
@@ -237,24 +285,24 @@ def check_and_create_teams(
         log.info(f"Team {contributor_team} already exists. Skipping creation...")
 
     gh_client.add_or_update_team_repository_permission(
-        repo_name, devops_admin_team, permission="push"
+        projects_repo_name, devops_admin_team, permission="push"
     )
     log.info(
-        f"Added {repo_name} repository with 'push/write' permission to GitHub Team {devops_admin_team}"
+        f"Added 'push/write' permissions to GitHub Team {devops_admin_team} on {projects_repo_name} repository"
     )
 
     gh_client.add_or_update_team_repository_permission(
-        repo_name, team_slug, permission="push"
+        projects_repo_name, team_slug, permission="push"
     )
     log.info(
-        f"Added {repo_name} repository with 'push/write' permission to GitHub Team {contributor_team}"
+        f"Added 'push/write' permissions to GitHub Team {contributor_team} on {projects_repo_name} repository"
     )
 
     gh_client.add_or_update_team_repository_permission(
-        repo_name, approver_team, permission="pull"
+        projects_repo_name, approver_team, permission="pull"
     )
     log.info(
-        f"Added {repo_name} repository with 'pull/read' permission to GitHub Team {approver_team}"
+        f"Added 'pull/read' permissions to GitHub Team {approver_team} on {projects_repo_name} repository"
     )
 
 
@@ -271,10 +319,10 @@ def create_github_environments(gh_client: GHApiClient, repo_name: str) -> None:
     gh_client.create_or_update_repo_env(
         repo_name, "signoff", ["cr8-ALL-projects-approver"]
     )
-    log.info(f"Created Signing Off environment for {repo_name}")
+    log.info(f"Created/updated Signing Off environment for {repo_name}")
 
     # Create the Production environment
     gh_client.create_or_update_repo_env(
         repo_name, "disclosure", ["cr8-ALL-projects-approver"]
     )
-    log.info(f"Created Disclosure environment for {repo_name}")
+    log.info(f"Created/ypdated disclosure environment on target projects {repo_name}")
