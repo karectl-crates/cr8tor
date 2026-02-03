@@ -17,6 +17,17 @@ data:
         user: "{{ "{{" }} user {{ "}}" }}"
         project: "{{ "{{" }} project {{ "}}" }}"
         karectl.io/project: "{{ "{{" }} project {{ "}}" }}"
+        {{ "{% if scheduling and scheduling.labels %}" }}
+        {{ "{% for key, value in scheduling.labels.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+        {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.annotations %}" }}
+      annotations:
+        {{ "{% for key, value in scheduling.annotations.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
     spec:
       containers:
         - name: desktop
@@ -58,6 +69,27 @@ data:
             timeoutSeconds: 1
             successThreshold: 1
             failureThreshold: 3
+          {{ "{% if scheduling and scheduling.resources %}" }}
+          resources:
+            {{ "{% if scheduling.resources.requests_cpu or scheduling.resources.requests_memory %}" }}
+            requests:
+              {{ "{% if scheduling.resources.requests_cpu %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.requests_cpu {{ "}}" }}"
+              {{ "{% endif %}" }}
+              {{ "{% if scheduling.resources.requests_memory %}" }}
+              memory: "{{ "{{" }} scheduling.resources.requests_memory {{ "}}" }}"
+              {{ "{% endif %}" }}
+            {{ "{% endif %}" }}
+            {{ "{% if scheduling.resources.limits_cpu or scheduling.resources.limits_memory %}" }}
+            limits:
+              {{ "{% if scheduling.resources.limits_cpu %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.limits_cpu {{ "}}" }}"
+              {{ "{% endif %}" }}
+              {{ "{% if scheduling.resources.limits_memory %}" }}
+              memory: "{{ "{{" }} scheduling.resources.limits_memory {{ "}}" }}"
+              {{ "{% endif %}" }}
+            {{ "{% endif %}" }}
+          {{ "{% endif %}" }}
           volumeMounts:
             - name: home
               mountPath: /home/ubuntu
@@ -71,12 +103,40 @@ data:
                   - /scripts/init-desktop.sh
       volumes:
         - name: home
+          {{ "{% if pvc_name %}" }}
+          persistentVolumeClaim:
+            claimName: {{ "{{" }} pvc_name {{ "}}" }}
+          {{ "{% else %}" }}
           emptyDir: {}
+          {{ "{% endif %}" }}
         - name: init-scripts
           configMap:
             name: vdi-init-scripts
             defaultMode: 0755
       terminationGracePeriodSeconds: 10
+      {{ "{% if scheduling and scheduling.node_selector %}" }}
+      nodeSelector:
+        {{ "{% for key, value in scheduling.node_selector.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.tolerations %}" }}
+      tolerations:
+        {{ "{% for toleration in scheduling.tolerations %}" }}
+        - key: "{{ "{{" }} toleration.key {{ "}}" }}"
+          operator: "{{ "{{" }} toleration.operator | default('Equal') {{ "}}" }}"
+          {{ "{% if toleration.value %}" }}
+          value: "{{ "{{" }} toleration.value {{ "}}" }}"
+          {{ "{% endif %}" }}
+          {{ "{% if toleration.effect %}" }}
+          effect: "{{ "{{" }} toleration.effect {{ "}}" }}"
+          {{ "{% endif %}" }}
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.affinity %}" }}
+      affinity:
+        {{ "{{" }} scheduling.affinity | tojson {{ "}}" }}
+      {{ "{% endif %}" }}
     ---
     apiVersion: v1
     kind: Service

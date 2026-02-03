@@ -1,72 +1,65 @@
-""" Network policy manager for creating project isolation policies.
+""" Network policy manager for project namespace isolation.
+
+Plan for custom CiliumNetworkPolicy per project namespace:
+- Allows all intra-namespace traffic (same project)
+- Allows traffic from/to infrastructure namespaces (jupyterhub, backend, cr8tor, keycloak)
+- Allows DNS resolution via kube-dns
+- Allows external/internet access
+- Cross-project isolation so different namespaces can't communicate
 """
+
+import logging
 
 import kubernetes
 from kubernetes.client.exceptions import ApiException
+import yaml
 
-# Target namespace where VDI pods run (TBD)
-VDI_NAMESPACE = "jupyterhub"
+logger = logging.getLogger(__name__)
 
 # CiliumNetworkPolicy template for project isolation
-NETWORK_POLICY_TEMPLATE = """
+# endpointSelector: {} selects ALL pods in the namespace.
+NAMESPACE_NETWORK_POLICY_TEMPLATE = """
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: project-{project_name}-isolation
+  name: project-isolation
   namespace: {namespace}
   labels:
     karectl.io/project: "{project_name}"
     karectl.io/managed-by: cr8tor
 spec:
-  endpointSelector:
-    matchLabels:
-      karectl.io/project: "{project_name}"
+  endpointSelector: {{}}
 
   ingress:
-    # Allow from same project
+    # Allow all intra-namespace traffic
     - fromEndpoints:
-        - matchLabels:
-            karectl.io/project: "{project_name}"
+        - {{}}
     # Allow from kube-system
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: kube-system
+    # Allow from jupyterhub namespace (hub, proxy, auth-proxy)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: jupyterhub
+    # Allow from backend namespace (portal)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: backend
+    # Allow from cr8tor namespace (operator)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: cr8tor
     # Allow from keycloak namespace
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: keycloak
-    # Allow from cr8tor namespace
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: cr8tor
-    # Allow from backend namespace
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: backend
-    # Allow from infrastructure pods without project label (hub, proxy, etc. within jupyterhub)
-    - fromEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: {namespace}
-          matchExpressions:
-            - key: karectl.io/project
-              operator: DoesNotExist
-
-  ingressDeny:
-    # Deny from OTHER projects
-    - fromEndpoints:
-        - matchExpressions:
-            - key: karectl.io/project
-              operator: Exists
-            - key: karectl.io/project
-              operator: NotIn
-              values:
-                - "{project_name}"
 
   egress:
-    # Allow to same project
+    # Allow all intra-namespace traffic
     - toEndpoints:
-        - matchLabels:
-            karectl.io/project: "{project_name}"
+        - {{}}
+    # Allow DNS resolution
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: kube-system
@@ -77,75 +70,54 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
+    # Allow to jupyterhub namespace (hub callbacks, proxy)
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: keycloak
+            k8s:io.kubernetes.pod.namespace: jupyterhub
+    # Allow to backend namespace (portal API)
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: backend
     # Allow to cr8tor namespace
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: cr8tor
-    # Allow to backend namespace
+    # Allow to keycloak namespace (authentication)
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: backend
-    # Allow to infrastructure pods without project label (hub, proxy, etc.)
-    # Restricted to jupyterhub namespace only
-    - toEndpoints:
-        - matchLabels:
-            k8s:io.kubernetes.pod.namespace: {namespace}
-          matchExpressions:
-            - key: karectl.io/project
-              operator: DoesNotExist
+            k8s:io.kubernetes.pod.namespace: keycloak
     # Allow external/internet access
     - toEntities:
         - world
-
-  egressDeny:
-    # Deny to OTHER projects
-    - toEndpoints:
-        - matchExpressions:
-            - key: karectl.io/project
-              operator: Exists
-            - key: karectl.io/project
-              operator: NotIn
-              values:
-                - "{project_name}"
 """
 
 
-def create_project_network_policy(project_name, namespace=VDI_NAMESPACE):
-    """ Create a CiliumNetworkPolicy for project isolation.
+def create_project_network_policy(project_name, namespace):
+    """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
         project_name: Name of the project
-        namespace: Namespace where VDI pods run (default: jupyterhub)
+        namespace: Project namespace
 
     Returns:
         dict with status of the operation
     """
-    import yaml
-
     api = kubernetes.client.CustomObjectsApi()
-    policy_name = f"project-{project_name}-isolation"
-
-    # Render the template
-    policy_yaml = NETWORK_POLICY_TEMPLATE.format(
+    policy_name = "project-isolation"
+    policy_yaml = NAMESPACE_NETWORK_POLICY_TEMPLATE.format(
         project_name=project_name,
-        namespace=namespace
+        namespace=namespace,
     )
     policy_body = yaml.safe_load(policy_yaml)
 
     try:
-        # Check if policy already exists
         existing = api.get_namespaced_custom_object(
             group="cilium.io",
             version="v2",
             namespace=namespace,
             plural="ciliumnetworkpolicies",
-            name=policy_name
+            name=policy_name,
         )
-
-        # Update existing policy
         policy_body["metadata"]["resourceVersion"] = existing["metadata"]["resourceVersion"]
         api.replace_namespaced_custom_object(
             group="cilium.io",
@@ -153,40 +125,39 @@ def create_project_network_policy(project_name, namespace=VDI_NAMESPACE):
             namespace=namespace,
             plural="ciliumnetworkpolicies",
             name=policy_name,
-            body=policy_body
+            body=policy_body,
         )
-        print(f"Updated CiliumNetworkPolicy: {policy_name} in {namespace}", flush=True)
+        logger.info(f"Updated CiliumNetworkPolicy in {namespace}")
         return {"status": "updated", "name": policy_name, "namespace": namespace}
 
     except ApiException as e:
         if e.status == 404:
-            # Create new one
             api.create_namespaced_custom_object(
                 group="cilium.io",
                 version="v2",
                 namespace=namespace,
                 plural="ciliumnetworkpolicies",
-                body=policy_body
+                body=policy_body,
             )
-            print(f"Created CiliumNetworkPolicy: {policy_name} in {namespace}", flush=True)
+            logger.info(f"Created CiliumNetworkPolicy in {namespace}")
             return {"status": "created", "name": policy_name, "namespace": namespace}
         else:
-            print(f"Failed to create/update CiliumNetworkPolicy {policy_name}: {e}", flush=True)
+            logger.error(f"Failed to create/update CiliumNetworkPolicy in {namespace}: {e}")
             raise
 
 
-def delete_project_network_policy(project_name, namespace=VDI_NAMESPACE):
-    """ Delete a CiliumNetworkPolicy for a project.
+def delete_project_network_policy(project_name, namespace):
+    """Delete the CiliumNetworkPolicy from a project namespace.
 
     Args:
         project_name: Name of the project
-        namespace: Namespace where the policy exists (default: jupyterhub)
+        namespace: Project namespace
 
     Returns:
         dict with status of the operation
     """
     api = kubernetes.client.CustomObjectsApi()
-    policy_name = f"project-{project_name}-isolation"
+    policy_name = "project-isolation"
 
     try:
         api.delete_namespaced_custom_object(
@@ -194,15 +165,14 @@ def delete_project_network_policy(project_name, namespace=VDI_NAMESPACE):
             version="v2",
             namespace=namespace,
             plural="ciliumnetworkpolicies",
-            name=policy_name
+            name=policy_name,
         )
-        print(f"Deleted CiliumNetworkPolicy: {policy_name} from {namespace}", flush=True)
+        logger.info(f"Deleted CiliumNetworkPolicy from {namespace}")
         return {"status": "deleted", "name": policy_name, "namespace": namespace}
-
     except ApiException as e:
         if e.status == 404:
-            print(f"CiliumNetworkPolicy {policy_name} not found in {namespace} (already deleted)", flush=True)
+            logger.info(f"CiliumNetworkPolicy not found in {namespace} (already deleted)")
             return {"status": "not_found", "name": policy_name, "namespace": namespace}
         else:
-            print(f"Failed to delete CiliumNetworkPolicy {policy_name}: {e}", flush=True)
+            logger.error(f"Failed to delete CiliumNetworkPolicy from {namespace}: {e}")
             raise
