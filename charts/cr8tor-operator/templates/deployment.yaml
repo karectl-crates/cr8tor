@@ -30,6 +30,27 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.gitea.enabled }}
+      initContainers:
+        - name: wait-for-gitea-secret
+          image: alpine/k8s:1.29.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for api-credentials secret..."
+              until kubectl get secret {{ .Values.gitea.adminSecretName }} -n {{ .Release.Namespace }} >/dev/null 2>&1; do
+                echo "  Secret not found, waiting..."
+                sleep 5
+              done
+              echo "Secret found..."
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 65534
+      {{- end }}
       containers:
         - name: operator
           image: {{ include "cr8tor-operator.image" . }}
@@ -116,16 +137,19 @@ spec:
                 configMapKeyRef:
                   name: {{ .Values.servicesConfigMapName }}
                   key: gitea-url
+                  optional: true
             - name: GITEA_VERIFY_TLS
               valueFrom:
                 configMapKeyRef:
                   name: {{ .Values.servicesConfigMapName }}
                   key: gitea-verify-tls
+                  optional: true
             - name: GITEA_ADMIN_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.gitea.adminSecretName }}
                   key: api-token
+                  optional: true
             {{- end }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
