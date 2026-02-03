@@ -11,7 +11,7 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 import os
 
-from cr8tor.plugins.base import BasePlugin
+from cr8tor.plugins.base import PluginBase
 from cr8tor.models.identity import (
     UserSpec,
     GroupSpec,
@@ -24,15 +24,12 @@ from cr8tor.models.identity import (
 logger = logging.getLogger(__name__)
 
 
-class ProjectSyncPlugin(BasePlugin):
+class ProjectSyncPlugin(PluginBase):
     """ Auto generate CRDs when cr8tor projects are published.
     """
 
     def __init__(self):
         super().__init__()
-        self.name = "project-sync"
-        self.description = "Auto generate from published cr8tor-projects"
-        self.version = "1.0.0"
 
         self.domain = None
         self.default_quota_tier = os.getenv("CRTOR_DEFAULT_QUOTA_TIER", "medium")
@@ -64,24 +61,33 @@ class ProjectSyncPlugin(BasePlugin):
 
         self.custom_api = None
 
-    def initialize(self) -> bool:
+    @property
+    def name(self):
+        return "project-sync"
+
+    @property
+    def version(self):
+        return "1.0.0"
+
+    @property
+    def description(self):
+        return "Auto generate CRDs from published cr8tor-projects"
+
+    @property
+    def models(self):
+        return []
+
+    def _initialise_plugin(self):
         """ Initialise the plugin.
         """
-        try:
-            self.custom_api = client.CustomObjectsApi()
-            self.core_api = client.CoreV1Api()
+        logger.info("Initialising project sync plugin...")
+        self.custom_api = client.CustomObjectsApi()
+        self.core_api = client.CoreV1Api()
 
-            # Load domain from realm config
-            self._load_domain_from_config()
-
-            logger.info(f"ProjectSyncPlugin initialised")
-            logger.info(f"  Domain: {self.domain}")
-            logger.info(f"  Default quota tier: {self.default_quota_tier}")
-            logger.info(f"  Target namespace: {self.target_namespace}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to initialise ProjectSyncPlugin: {e}")
-            return False
+        # Load domain from realm config
+        self._load_domain_from_config()
+        logger.info(f"Domain: {self.domain}")
+        logger.info(f"Default quota tier: {self.default_quota_tier}")
 
     def _load_domain_from_config(self):
         """ Load domain from config map
@@ -101,12 +107,12 @@ class ProjectSyncPlugin(BasePlugin):
     def register_handlers(self):
         """ Register kopf handlers.
         """
-        pass
-
-    def shutdown(self):
-        """ Cleanup on shutdown.
-        """
-        logger.info("ProjectSyncPlugin shutting down")
+        try:
+            from cr8tor.handlers import project_sync_handler
+            logger.info("Project sync handlers registered successfully")
+        except Exception as e:
+            logger.error(f"Failed to register project sync handlers: {e}")
+            raise
 
     def generate_project_crd(self, project_data, quota_tier):
         """ Generate project CRD from the data.
@@ -404,48 +410,3 @@ class ProjectSyncPlugin(BasePlugin):
         else:
             logger.warning(f"Partially synced project: {project_name}")
             return {"status": "partial", "project": project_name, "results": results}
-
-
-
-# Plugin instance
-plugin = ProjectSyncPlugin()
-
-
-@kopf.on.create("v1", "configmap", labels={"karectl.io/trigger": "project-sync"})
-@kopf.on.update("v1", "configmap", labels={"karectl.io/trigger": "project-sync"})
-def project_sync_trigger(body, meta, **kwargs):
-    """ Triggered when a ConfigMap with label karectl.io/trigger=project-sync is created/updated.
-
-    Expected ConfigMap data:
-        project_data: JSON string containing parsed project.toml data
-    """
-    import json
-
-    logger.info("Project sync triggered via ConfigMap")
-
-    # Get project data from ConfigMap
-    data = body.get("data", {})
-    project_data_json = data.get("project_data")
-
-    if not project_data_json:
-        logger.error("No project_data found in ConfigMap")
-        kopf.warn(meta, reason="SyncFailed", message="Missing project_data in ConfigMap")
-        return
-
-    try:
-        # Parse JSON data
-        project_data = json.loads(project_data_json)
-        project_name = project_data.get("project", {}).get("name", "unknown")
-
-        logger.info(f"Syncing project: {project_name}")
-        # Trigger the sync with parsed data
-        result = plugin.sync_project_from_data(project_data)
-        logger.info(f"Sync result: {result}")
-        kopf.info(meta, reason="SyncCompleted", message=f"Project {project_name} sync: {result.get('status')}")
-
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in project_data: {e}")
-        kopf.warn(meta, reason="SyncFailed", message=f"Invalid JSON data: {e}")
-    except Exception as e:
-        logger.error(f"Error syncing project: {e}")
-        kopf.warn(meta, reason="SyncFailed", message=f"Sync error: {e}")
