@@ -103,6 +103,52 @@ class KeycloakClientSpec(CRDSpec):
         description="Additional Keycloak client configuration",
     )
 
+class ResourceQuotaConfig(CRDSpec):
+    """ Resource quota configuration for a project namespace."""
+
+    requests_cpu: Optional[str] = Field(
+        default="4", description="Total CPU requests allowed"
+    )
+    requests_memory: Optional[str] = Field(
+        default="8Gi", description="Total memory requests allowed"
+    )
+    limits_cpu: Optional[str] = Field(
+        default="8", description="Total CPU limits allowed"
+    )
+    limits_memory: Optional[str] = Field(
+        default="16Gi", description="Total memory limits allowed"
+    )
+    pods: Optional[str] = Field(
+        default="20", description="Maximum number of pods"
+    )
+    services: Optional[str] = Field(
+        default="10", description="Maximum number of services"
+    )
+    persistentvolumeclaims: Optional[str] = Field(
+        default="10", description="Maximum number of PVCs"
+    )
+    requests_storage: Optional[str] = Field(
+        default=None, description="Total storage requests allowed"
+    )
+
+
+class LimitRangeConfig(CRDSpec):
+    """ Default limit range for containers in a project namespace. """
+
+    default_cpu: Optional[str] = Field(
+        default="500m", description="Default CPU limit per container"
+    )
+    default_memory: Optional[str] = Field(
+        default="1Gi", description="Default memory limit per container"
+    )
+    default_request_cpu: Optional[str] = Field(
+        default="100m", description="Default CPU request per container"
+    )
+    default_request_memory: Optional[str] = Field(
+        default="256Mi", description="Default memory request per container"
+    )
+
+
 class AppConfig(CRDSpec):
     """Application configuration within a project."""
 
@@ -112,6 +158,62 @@ class AppConfig(CRDSpec):
     config: Dict[str, Any] = Field(
         default_factory=dict, description="Application-specific configuration"
     )
+
+class StorageConfig(CRDSpec):
+    """Storage configuration for a project namespace."""
+
+    storage_class: Optional[str] = Field(
+        default=None, description="StorageClass to use for PVCs"
+    )
+    default_vdi_size: Optional[str] = Field(
+        default=None, description="Default PVC size for VDI instances"
+    )
+    default_notebook_size: Optional[str] = Field(
+        default=None, description="Default PVC size for Jupyter notebooks"
+    )
+
+
+class TolerationConfig(CRDSpec):
+    """Kubernetes toleration configuration."""
+
+    key: str = Field(..., description="Toleration key")
+    operator: str = Field(default="Equal", description="Operator (Equal or Exists)")
+    value: Optional[str] = Field(default=None, description="Toleration value")
+    effect: Optional[str] = Field(default=None, description="Effect (NoSchedule, PreferNoSchedule, NoExecute)")
+    toleration_seconds: Optional[int] = Field(default=None, description="Toleration seconds for NoExecute")
+
+
+class ResourceRequirementsConfig(CRDSpec):
+    """Resource requests and limits configuration."""
+
+    requests_cpu: Optional[str] = Field(default=None, description="CPU request")
+    requests_memory: Optional[str] = Field(default=None, description="Memory request")
+    limits_cpu: Optional[str] = Field(default=None, description="CPU limit")
+    limits_memory: Optional[str] = Field(default=None, description="Memory limit")
+
+
+class SchedulingConfig(CRDSpec):
+    """Scheduling configuration for workspaces in a project."""
+
+    node_selector: Dict[str, str] = Field(
+        default_factory=dict, description="Node selector labels"
+    )
+    tolerations: List[TolerationConfig] = Field(
+        default_factory=list, description="Pod tolerations"
+    )
+    affinity: Optional[Dict[str, Any]] = Field(
+        default=None, description="Pod affinity/anti-affinity rules"
+    )
+    resources: Optional[ResourceRequirementsConfig] = Field(
+        default=None, description="Default resource requests/limits for workspaces"
+    )
+    labels: Dict[str, str] = Field(
+        default_factory=dict, description="Additional labels for workspace pods"
+    )
+    annotations: Dict[str, str] = Field(
+        default_factory=dict, description="Additional annotations for workspace pods"
+    )
+
 
 class ProfileKubespawnerOverride(CRDSpec):
     """Kubespawner override configuration for profiles."""
@@ -147,4 +249,20 @@ class ProjectSpec(CRDSpec):
     profiles: List[ProfileConfig] = Field(
         default_factory=list,
         description="List of workspace profiles for this project",
+    )
+    resource_quota: Optional[ResourceQuotaConfig] = Field(
+        default=None,
+        description="Resource quota for the project namespace",
+    )
+    limit_range: Optional[LimitRangeConfig] = Field(
+        default=None,
+        description="Default limits for containers in the project namespace",
+    )
+    storage: Optional[StorageConfig] = Field(
+        default=None,
+        description="Storage configuration for the project",
+    )
+    scheduling: Optional[SchedulingConfig] = Field(
+        default=None,
+        description="Scheduling configuration for workspace pods",
     )
