@@ -34,6 +34,11 @@ on:
           required: false
           default: 'main'
           type: string
+        projects_repository:
+          description: 'Organisation cr8tor projects repository name'
+          required: true
+          default: 'cr8tor-projects'
+          type: string
 
 env:
     GH_TOKEN: ${{ secrets.ORG_LVL_RW_REPOS_TEAMS }}
@@ -61,4 +66,4 @@ jobs:
           git config --global user.email "${{ github.repository_owner }}-actions@github.com"
 
           ORG=$(echo $GITHUB_REPOSITORY | cut -d'/' -f1)
-          cr8tor initiate -t https://github.com/${{ github.repository_owner }}/cr8-cookiecutter/ -chk "${{inputs.cookiecutter_branch}}" -cb "${{inputs.cr8tor_branch}}" -n "${{inputs.new_project_name}}" -org $ORG -e "${{inputs.environment}}" -ros "${{inputs.runner_os}}" --push
+          cr8tor initiate -repo "${{inputs.projects_repository}}" -t https://github.com/${{ github.repository_owner }}/cr8-cookiecutter/ -chk "${{inputs.cookiecutter_branch}}" -cb "${{inputs.cr8tor_branch}}" -n "${{inputs.new_project_name}}" -org $ORG -e "${{inputs.environment}}" -ros "${{inputs.runner_os}}" --push
