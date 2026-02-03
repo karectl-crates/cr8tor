@@ -68,17 +68,17 @@ spec:
             - name: KEYCLOAK_REALM
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: realm-name
             - name: KEYCLOAK_URL
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: keycloak-url
             - name: KEYCLOAK_VERIFY_TLS
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: keycloak-verify-tls
             # Identity namespace (where User/Group CRDs are stored)
             - name: IDENTITY_NAMESPACE
@@ -119,6 +119,23 @@ spec:
             {{- if .Values.storage.defaultReadonlySize }}
             - name: STORAGE_DEFAULT_READONLY_SIZE
               value: {{ .Values.storage.defaultReadonlySize | quote }}
+            # Gitea configuration
+            {{- if .Values.gitea.enabled }}
+            - name: GITEA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.servicesConfigMapName }}
+                  key: gitea-url
+            - name: GITEA_VERIFY_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.servicesConfigMapName }}
+                  key: gitea-verify-tls
+            - name: GITEA_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitea.adminSecretName }}
+                  key: api-token
             {{- end }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
