@@ -107,6 +107,26 @@ jobs:
                   if [ $exitCode -ne 0 ]; then
                     echo "::error::Cr8tor validate failed: $errorMessage"
                     echo "CR8TOR_ERROR=1" >> $GITHUB_ENV
+                  else
+                    # run cr8tor generate-crds and capture the error message
+                    set +e
+                    errorMessage=$(cr8tor generate-crds --output ./resources/deployment/models --force 2>&1)
+                    exitCode=$?
+                    set -e
+                    if [ $exitCode -ne 0 ]; then
+                      echo "::error::Cr8tor generate-crds failed: $errorMessage"
+                      echo "CR8TOR_ERROR=1" >> $GITHUB_ENV
+                    else
+                      # run cr8tor create-deployment and capture the error message
+                      set +e
+                      errorMessage=$(cr8tor create-deployment -i ./resources -o ./resources/deployment/crds -s ./resources/deployment/models 2>&1)
+                      exitCode=$?
+                      set -e
+                      if [ $exitCode -ne 0 ]; then
+                        echo "::error::Cr8tor create-deployment failed: $errorMessage"
+                        echo "CR8TOR_ERROR=1" >> $GITHUB_ENV
+                      fi
+                    fi
                   fi
                 fi
               continue-on-error: true
