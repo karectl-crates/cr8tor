@@ -7,7 +7,8 @@ from cr8tor.cli.sign_off import app as sign_off_command
 from cr8tor.cli.disclosure import app as disclosure_command
 from cr8tor.cli.stage_transfer import app as stage_transfer_command
 from cr8tor.cli.publish import app as publish_command
-from cr8tor.cli.initiate import app as initiate_command 
+from cr8tor.cli.initiate import app as initiate_command
+from cr8tor.cli.deploy import app as deploy_command
 
 from dotenv import load_dotenv, find_dotenv
 
@@ -28,6 +29,7 @@ app.add_typer(disclosure_command)
 app.add_typer(stage_transfer_command)
 app.add_typer(publish_command)
 app.add_typer(initiate_command)
+app.add_typer(deploy_command)
 
 # Add operator commands
 @app.command("operator")

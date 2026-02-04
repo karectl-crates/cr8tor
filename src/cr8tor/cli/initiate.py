@@ -24,10 +24,9 @@ def initiate(
         str,
         typer.Option(
             default="-t",
-            help="GitHub URL or relative path to cr8-cookiecutter template",
-            prompt=True,
+            help="GitHub URL or relative path to cr8-cookiecutter template (not needed with --skip-template)",
         ),
-    ],
+    ] = None,
     push_to_github: Annotated[
         bool,
         typer.Option(
@@ -90,6 +89,20 @@ def initiate(
             show_choices=True,
         ),
     ] = "Windows",
+    skip_template: Annotated[
+        bool,
+        typer.Option(
+            "--skip-template",
+            help="Skip cookiecutter template generation and use existing project directory",
+        ),
+    ] = False,
+    project_dir: Annotated[
+        str,
+        typer.Option(
+            "--project-dir",
+            help="Path to existing project directory (used with --skip-template). Defaults to ./{project_name}",
+        ),
+    ] = None,
 ):
     """
     Initializes a new CR8 project using a specified cookiecutter template.
@@ -105,9 +118,11 @@ def initiate(
         environment (str): The target environment (DEV, TEST, PROD). Defaults to "PROD".
         cr8tor_branch (str, optional): For development and debugging. Specifies the GitHub cr8tor branch to be used in the orchestration layer.
         runner_os (str): The target runner OS for GitHub Actions workflows (Windows, Linux). Defaults to "Windows".
+        skip_template (bool): Skip cookiecutter template generation and use existing project directory. Defaults to False.
+        project_dir (str): Path to existing project directory (used with --skip-template). Defaults to None.
 
     This command performs the following actions:
-    - Generates a new project by applying the specified cookiecutter template.
+    - Generates a new project by applying the specified cookiecutter template (unless --skip-template is set).
     - Adds a timestamp to the context used by the template.
     - If `push_to_github` is True, creates a GitHub repository under the specified organization and pushes the generated project to GitHub using the personal access token (retrieved from `os.getenv("GH_TOKEN")`).
 
@@ -119,6 +134,16 @@ def initiate(
         cr8tor initiate -t path-to-local-cr8-cookiecutter-dir -n "my-project" -org "lsc-sde-crates" --push
 
         cr8tor initiate -t path-to-local-cr8-cookiecutter-dir -n "my-project" -org "lsc-sde-crates" -ros "Linux" --push
+        
+        # Push existing project to GitHub (from parent directory)
+        cr8tor initiate -n "my-project" -org "lsc-sde-crates" -repo "cr8tor-projects" --push --skip-template
+        
+        # Push existing project to GitHub (from inside project directory)
+        cd my-project
+        cr8tor initiate -org "lsc-sde-crates" -repo "cr8tor-projects" --push --skip-template
+        
+        # Push existing project with explicit path
+        cr8tor initiate --project-dir ./path/to/project -org "lsc-sde-crates" -repo "cr8tor-projects" --push --skip-template
     """
     valid_environments = ["DEV", "TEST", "PROD"]
     if environment.upper() not in valid_environments:
@@ -130,51 +155,96 @@ def initiate(
     if runner_os not in valid_runner_os:
         raise typer.BadParameter(f"Invalid runner OS. Choose from {valid_runner_os}.")
 
-    extra_context = {
-        "__timestamp": datetime.now().isoformat(timespec="seconds"),
-        "__cr8_cc_template": template_path,
-        "environment": environment.upper(),
-        "__github_cr8tor_branch": cr8tor_branch,
-        "runner_os": runner_os,
-    }
-
-    # Generate the project with cookiecutter
-    if project_name is not None:
-        extra_context.update({"project_name": project_name})
-        extra_context.update({"github_organization": git_org})
-        # extra_context.update({"github_projects_repo": git_projects_repo})
-        try:
-            project_dir = cookiecutter(
-                template_path,
-                checkout=checkout,
-                extra_context=extra_context,
-                no_input=True,
+    # Check if we should skip template generation and use existing project
+    if skip_template:
+        if not project_name and not project_dir:
+            raise typer.BadParameter(
+                "Either project name (-n) or project directory (--project-dir) is required when using --skip-template"
             )
-
-        except OutputDirExistsException as e:
-            log.info("Project directory already exists. Skipping creation...")
-            # Extract folder name from exception message
-            folder_name = re.search(r'"(.*?)"', str(e)).group(1)
-            project_dir = Path.cwd() / folder_name
-    else:
-        try:
-            project_dir = cookiecutter(
-                template_path, checkout=checkout, extra_context=extra_context
-            )
-        except FailedHookException as e:
-            # Extract error message from the exception
-            error_msg = str(e)
-            if "VALIDATION_ERROR:" in error_msg:
-                validation_error = error_msg.split("VALIDATION_ERROR:")[1].strip()
-                print(f"Validation failed: {validation_error}")
+        
+        # Determine project directory
+        if project_dir:
+            # Use explicitly provided project directory
+            project_dir_path = Path(project_dir).resolve()
+        elif project_name:
+            # Check if current directory is the project (has resources/governance/project.toml)
+            current_dir = Path.cwd()
+            if (current_dir / "resources" / "governance" / "project.toml").exists():
+                project_dir_path = current_dir
+                log.info(f"Detected project in current directory: {project_dir_path}")
             else:
-                print(f"Hook failed: {error_msg}")
-            sys.exit(1)
-        except OutputDirExistsException as e:
-            log.info("Project directory already exists. Skipping creation...")
-            # Extract folder name from exception message
-            folder_name = re.search(r'"(.*?)"', str(e)).group(1)
-            project_dir = Path.cwd() / folder_name
+                # Look for project as subdirectory
+                project_dir_path = current_dir / project_name
+        
+        if not project_dir_path.exists():
+            raise typer.BadParameter(
+                f"Project directory '{project_dir_path}' does not exist. "
+                f"Cannot use --skip-template without an existing project."
+            )
+        
+        # Verify it's a valid project directory
+        project_resources_path = project_dir_path / "resources" / "governance" / "project.toml"
+        if not project_resources_path.exists():
+            raise typer.BadParameter(
+                f"Invalid project directory. Missing: {project_resources_path}"
+            )
+        
+        log.info(f"Using existing project directory: {project_dir_path}")
+        project_dir = str(project_dir_path)
+    
+    else:
+        # Template path is required when not skipping template
+        if not template_path:
+            raise typer.BadParameter(
+                "Template path (-t) is required when not using --skip-template"
+            )
+        
+        # Generate project with cookiecutter
+        extra_context = {
+            "__timestamp": datetime.now().isoformat(timespec="seconds"),
+            "__cr8_cc_template": template_path,
+            "environment": environment.upper(),
+            "__github_cr8tor_branch": cr8tor_branch,
+            "runner_os": runner_os,
+        }
+
+        # Generate the project with cookiecutter
+        if project_name is not None:
+            extra_context.update({"project_name": project_name})
+            extra_context.update({"github_organization": git_org})
+            # extra_context.update({"github_projects_repo": git_projects_repo})
+            try:
+                project_dir = cookiecutter(
+                    template_path,
+                    checkout=checkout,
+                    extra_context=extra_context,
+                    no_input=True,
+                )
+
+            except OutputDirExistsException as e:
+                log.info("Project directory already exists. Skipping creation...")
+                # Extract folder name from exception message
+                folder_name = re.search(r'"(.*?)"', str(e)).group(1)
+                project_dir = Path.cwd() / folder_name
+        else:
+            try:
+                project_dir = cookiecutter(
+                    template_path, checkout=checkout, extra_context=extra_context
+                )
+            except FailedHookException as e:
+                # Extract error message from the exception
+                error_msg = str(e)
+                if "VALIDATION_ERROR:" in error_msg:
+                    validation_error = error_msg.split("VALIDATION_ERROR:")[1].strip()
+                    print(f"Validation failed: {validation_error}")
+                else:
+                    print(f"Hook failed: {error_msg}")
+                sys.exit(1)
+            except OutputDirExistsException as e:
+                log.info("Project directory already exists. Skipping creation...")
+                # Extract folder name from exception message
+                folder_name = re.search(r'"(.*?)"', str(e)).group(1)
+                project_dir = Path.cwd() / folder_name
 
     resources_dir = Path(project_dir).joinpath("resources")
     project_resource_path = resources_dir.joinpath("governance", "project.toml")
