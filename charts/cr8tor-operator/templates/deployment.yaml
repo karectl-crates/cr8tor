@@ -1,0 +1,132 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "cr8tor-operator.fullname" . }}
+  labels:
+    {{- include "cr8tor-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "cr8tor-operator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "cr8tor-operator.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "cr8tor-operator.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: operator
+          image: {{ include "cr8tor-operator.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            - name: WORKER_LIMIT
+              value: {{ .Values.config.workerLimit | quote }}
+            - name: POSTING_ENABLED
+              value: {{ .Values.config.postingEnabled | quote }}
+            - name: SERVER_TIMEOUT
+              value: {{ .Values.config.serverTimeout | quote }}
+            - name: MANAGE_CRDS
+              value: {{ .Values.config.manageCrds | quote }}
+            - name: GENERATE_CRD_FILES
+              value: {{ .Values.config.generateCrdFiles | quote }}
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KEYCLOAK_ADMIN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keycloak.adminSecretName }}
+                  key: username
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.keycloak.adminSecretName }}
+                  key: password
+            - name: KEYCLOAK_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  key: realm-name
+            - name: KEYCLOAK_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  key: keycloak-url
+            - name: KEYCLOAK_VERIFY_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  key: keycloak-verify-tls
+            # Identity namespace (where User/Group CRDs are stored)
+            - name: IDENTITY_NAMESPACE
+              value: {{ .Values.identity.namespace | quote }}
+            # Storage configuration
+            - name: STORAGE_DEFAULT_STORAGE_CLASS
+              value: {{ .Values.storage.defaultStorageClass | quote }}
+            {{- if .Values.storage.defaultVdiSize }}
+            - name: STORAGE_DEFAULT_VDI_SIZE
+              value: {{ .Values.storage.defaultVdiSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.defaultNotebookSize }}
+            - name: STORAGE_DEFAULT_NOTEBOOK_SIZE
+              value: {{ .Values.storage.defaultNotebookSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.maxVdiSize }}
+            - name: STORAGE_MAX_VDI_SIZE
+              value: {{ .Values.storage.maxVdiSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.maxNotebookSize }}
+            - name: STORAGE_MAX_NOTEBOOK_SIZE
+              value: {{ .Values.storage.maxNotebookSize | quote }}
+            {{- end }}
+            - name: STORAGE_DEFAULT_PERSIST
+              value: {{ .Values.storage.defaultPersist | quote }}
+          {{- if .Values.vdiTemplates.enabled }}
+          volumeMounts:
+            - name: vdi-templates
+              mountPath: /app/templates
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.vdiTemplates.enabled }}
+      volumes:
+        - name: vdi-templates
+          configMap:
+            name: {{ include "cr8tor-operator.fullname" . }}-vdi-templates
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

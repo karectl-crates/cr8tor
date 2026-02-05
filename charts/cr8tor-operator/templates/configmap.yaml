@@ -1,51 +1,63 @@
-# VDI pod templates
+{{- if .Values.vdiTemplates.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: vdi-pod-template
-  namespace: cr8tor
+  name: {{ include "cr8tor-operator.fullname" . }}-vdi-templates
+  labels:
+    {{- include "cr8tor-operator.labels" . | nindent 4 }}
 data:
   vdi-pod-template.yaml.j2: |
     apiVersion: v1
     kind: Pod
     metadata:
-      name: vdi-{{ name }}
-      namespace: {{ namespace }}
+      name: vdi-{{ "{{" }} name {{ "}}" }}
+      namespace: {{ "{{" }} namespace {{ "}}" }}
       labels:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
-        karectl.io/project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
+        karectl.io/project: "{{ "{{" }} project {{ "}}" }}"
+        {{ "{% if scheduling and scheduling.labels %}" }}
+        {{ "{% for key, value in scheduling.labels.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+        {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.annotations %}" }}
+      annotations:
+        {{ "{% for key, value in scheduling.annotations.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
     spec:
       containers:
         - name: desktop
-          image: "{{ image }}"
+          image: "{{ "{{" }} image {{ "}}" }}"
           imagePullPolicy: Always
           env:
-            {% if password %}
+            {{ "{% if password %}" }}
             - name: NEW_PASSWORD
-              value: "{{ password }}"
-            {% endif %}
+              value: "{{ "{{" }} password {{ "}}" }}"
+            {{ "{% endif %}" }}
             - name: VDI_USER
-              value: "{{ user }}"
+              value: "{{ "{{" }} user {{ "}}" }}"
             - name: VDI_PROJECT
-              value: "{{ project }}"
+              value: "{{ "{{" }} project {{ "}}" }}"
             - name: KARECTL_USER
-              value: "{{ user }}"
+              value: "{{ "{{" }} user {{ "}}" }}"
             - name: KARECTL_PROJECT
-              value: "{{ project }}"
+              value: "{{ "{{" }} project {{ "}}" }}"
             - name: VDI_LINUX_USER
-              value: "{{ linux_user }}"
+              value: "{{ "{{" }} linux_user {{ "}}" }}"
             - name: KARECTL_ENVIRONMENT
-              value: "{{ env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) }}"
+              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) {{ "}}" }}"
             - name: KARECTL_DOMAIN
-              value: "{{ env_vars | selectattr('name', 'equalto', 'KARECTL_DOMAIN') | map(attribute='value') | first | default('karectl.org', true) }}"
-            {% if env_vars %}
-            {% for env_var in env_vars %}
-            - name: {{ env_var.name }}
-              value: "{{ env_var.value }}"
-            {% endfor %}
-            {% endif %}
+              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'KARECTL_DOMAIN') | map(attribute='value') | first | default('karectl.org', true) {{ "}}" }}"
+            {{ "{% if env_vars %}" }}
+            {{ "{% for env_var in env_vars %}" }}
+            - name: {{ "{{" }} env_var.name {{ "}}" }}
+              value: "{{ "{{" }} env_var.value {{ "}}" }}"
+            {{ "{% endfor %}" }}
+            {{ "{% endif %}" }}
           ports:
             - containerPort: 3389
             - containerPort: 5900
@@ -57,6 +69,27 @@ data:
             timeoutSeconds: 1
             successThreshold: 1
             failureThreshold: 3
+          {{ "{% if scheduling and scheduling.resources %}" }}
+          resources:
+            {{ "{% if scheduling.resources.requests_cpu or scheduling.resources.requests_memory %}" }}
+            requests:
+              {{ "{% if scheduling.resources.requests_cpu %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.requests_cpu {{ "}}" }}"
+              {{ "{% endif %}" }}
+              {{ "{% if scheduling.resources.requests_memory %}" }}
+              memory: "{{ "{{" }} scheduling.resources.requests_memory {{ "}}" }}"
+              {{ "{% endif %}" }}
+            {{ "{% endif %}" }}
+            {{ "{% if scheduling.resources.limits_cpu or scheduling.resources.limits_memory %}" }}
+            limits:
+              {{ "{% if scheduling.resources.limits_cpu %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.limits_cpu {{ "}}" }}"
+              {{ "{% endif %}" }}
+              {{ "{% if scheduling.resources.limits_memory %}" }}
+              memory: "{{ "{{" }} scheduling.resources.limits_memory {{ "}}" }}"
+              {{ "{% endif %}" }}
+            {{ "{% endif %}" }}
+          {{ "{% endif %}" }}
           volumeMounts:
             - name: home
               mountPath: /home/ubuntu
@@ -70,27 +103,55 @@ data:
                   - /scripts/init-desktop.sh
       volumes:
         - name: home
+          {{ "{% if pvc_name %}" }}
+          persistentVolumeClaim:
+            claimName: {{ "{{" }} pvc_name {{ "}}" }}
+          {{ "{% else %}" }}
           emptyDir: {}
+          {{ "{% endif %}" }}
         - name: init-scripts
           configMap:
             name: vdi-init-scripts
             defaultMode: 0755
       terminationGracePeriodSeconds: 10
+      {{ "{% if scheduling and scheduling.node_selector %}" }}
+      nodeSelector:
+        {{ "{% for key, value in scheduling.node_selector.items() %}" }}
+        {{ "{{" }} key {{ "}}" }}: "{{ "{{" }} value {{ "}}" }}"
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.tolerations %}" }}
+      tolerations:
+        {{ "{% for toleration in scheduling.tolerations %}" }}
+        - key: "{{ "{{" }} toleration.key {{ "}}" }}"
+          operator: "{{ "{{" }} toleration.operator | default('Equal') {{ "}}" }}"
+          {{ "{% if toleration.value %}" }}
+          value: "{{ "{{" }} toleration.value {{ "}}" }}"
+          {{ "{% endif %}" }}
+          {{ "{% if toleration.effect %}" }}
+          effect: "{{ "{{" }} toleration.effect {{ "}}" }}"
+          {{ "{% endif %}" }}
+        {{ "{% endfor %}" }}
+      {{ "{% endif %}" }}
+      {{ "{% if scheduling and scheduling.affinity %}" }}
+      affinity:
+        {{ "{{" }} scheduling.affinity | tojson {{ "}}" }}
+      {{ "{% endif %}" }}
     ---
     apiVersion: v1
     kind: Service
     metadata:
-      name: vdi-{{ user }}-{{ project }}
-      namespace: {{ namespace }}
+      name: vdi-{{ "{{" }} user {{ "}}" }}-{{ "{{" }} project {{ "}}" }}
+      namespace: {{ "{{" }} namespace {{ "}}" }}
       labels:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
     spec:
       selector:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
       ports:
         - name: rdp
           port: 3389
@@ -103,18 +164,18 @@ data:
     apiVersion: v1
     kind: Pod
     metadata:
-      name: vdi-{{ name }}
-      namespace: {{ namespace }}
+      name: vdi-{{ "{{" }} name {{ "}}" }}
+      namespace: {{ "{{" }} namespace {{ "}}" }}
       labels:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
-        karectl.io/project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
+        karectl.io/project: "{{ "{{" }} project {{ "}}" }}"
         os-type: windows-vm
     spec:
       containers:
       - name: desktop
-        image: {{ image }}
+        image: {{ "{{" }} image {{ "}}" }}
         ports:
         - containerPort: 3389
           protocol: TCP
@@ -124,19 +185,19 @@ data:
           protocol: TCP
         env:
         - name: USERNAME
-          value: "{{ user }}"
+          value: "{{ "{{" }} user {{ "}}" }}"
         - name: PASSWORD
-          value: "{{ password }}"
+          value: "{{ "{{" }} password {{ "}}" }}"
         - name: RAM_SIZE
           value: "2G"
         - name: CPU_CORES
           value: "2"
         - name: DISK_SIZE
           value: "30G"
-        {% for env_var in env_vars %}
-        - name: {{ env_var.name }}
-          value: "{{ env_var.value }}"
-        {% endfor %}
+        {{ "{% for env_var in env_vars %}" }}
+        - name: {{ "{{" }} env_var.name {{ "}}" }}
+          value: "{{ "{{" }} env_var.value {{ "}}" }}"
+        {{ "{% endfor %}" }}
         securityContext:
           privileged: true
         resources:
@@ -162,18 +223,18 @@ data:
     apiVersion: v1
     kind: Service
     metadata:
-      name: vdi-{{ user }}-{{ project }}
-      namespace: {{ namespace }}
+      name: vdi-{{ "{{" }} user {{ "}}" }}-{{ "{{" }} project {{ "}}" }}
+      namespace: {{ "{{" }} namespace {{ "}}" }}
       labels:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
         os-type: windows
     spec:
       selector:
         app: vdi
-        user: "{{ user }}"
-        project: "{{ project }}"
+        user: "{{ "{{" }} user {{ "}}" }}"
+        project: "{{ "{{" }} project {{ "}}" }}"
       ports:
       - name: rdp
         port: 3389
@@ -189,12 +250,12 @@ data:
         protocol: TCP
       type: ClusterIP
 ---
-# VDI initialization scripts
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vdi-init-scripts
-  namespace: cr8tor
+  labels:
+    {{- include "cr8tor-operator.labels" . | nindent 4 }}
 data:
   init-desktop.sh: |
     #!/bin/bash
@@ -211,21 +272,17 @@ data:
         DOMAIN="${KARECTL_DOMAIN}"
         echo "Using explicit environment and domain"
     elif [ -n "${KARECTL_BACKEND_URL}" ]; then
-        # extract from backend URL
         if [[ "${KARECTL_BACKEND_URL}" == *".svc.cluster.local"* ]]; then
-            # Internal cluster URL - use defaults
             ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
             DOMAIN="${KARECTL_DOMAIN:-cluster.local}"
             echo "Using internal cluster URL with defaults"
         else
-            # External URL
             BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://portal\.||' | sed 's|/.*||')
             ENVIRONMENT=$(echo "${BACKEND_HOST}" | cut -d. -f1)
             DOMAIN="${BACKEND_HOST}"
             echo "Extracted environment and domain from portal URL"
         fi
     else
-        # no explicit values, using defaults
         ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
         DOMAIN="${KARECTL_DOMAIN:-localhost}"
         echo "Using default environment and domain"
@@ -236,7 +293,6 @@ data:
     DESKTOP_DIR="/home/${LINUX_USER}/Desktop"
     mkdir -p "${DESKTOP_DIR}"
 
-    # Create .desktop file
     create_desktop_shortcut() {
         local name="$1"
         local url="$2"
@@ -259,7 +315,6 @@ data:
         echo "Created shortcut: ${name}"
     }
 
-    # Create Firefox desktop shortcut
     cat > "${DESKTOP_DIR}/firefox.desktop" <<EOF
     [Desktop Entry]
     Version=1.0
@@ -283,10 +338,8 @@ data:
             "jupyterhub.desktop"
     fi
 
-    # Configure XFCE4 desktop settings
     mkdir -p /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml
 
-    # Disable XFCE4 screensaver
     cat > /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-screensaver.xml <<EOF
     <?xml version="1.0" encoding="UTF-8"?>
     <channel name="xfce4-screensaver" version="1.0">
@@ -299,7 +352,7 @@ data:
       </property>
     </channel>
     EOF
-    # Disable XFCE4 power management
+
     cat > /home/${LINUX_USER}/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-power-manager.xml <<EOF
     <?xml version="1.0" encoding="UTF-8"?>
     <channel name="xfce4-power-manager" version="1.0">
@@ -314,11 +367,9 @@ data:
     </channel>
     EOF
 
-    # Set Firefox preferences
     FIREFOX_PROFILE_DIR="/home/${LINUX_USER}/.mozilla/firefox"
     mkdir -p "${FIREFOX_PROFILE_DIR}"
 
-    # Create user.js with preferences
     cat > "/home/${LINUX_USER}/user-prefs.js" <<EOF
     // Auto-generated Firefox preferences for VDI
     user_pref("browser.startup.homepage", "about:blank");
@@ -331,13 +382,13 @@ data:
     user_pref("browser.sessionstore.resume_from_crash", false);
     EOF
 
-    # Set ownership
     chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/Desktop || true
     chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/.mozilla 2>/dev/null || true
     chown -R ${LINUX_USER}:${LINUX_USER} /home/${LINUX_USER}/.config 2>/dev/null || true
 
-    echo "====== Setup Complete ======"
+    echo "Setup Completed!"
     echo ""
     echo "Available shortcuts:"
     ls -lh "${DESKTOP_DIR}"/*.desktop 2>/dev/null || echo "No .desktop files found"
     echo ""
+{{- end }}
