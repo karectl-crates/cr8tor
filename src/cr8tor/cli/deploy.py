@@ -372,6 +372,14 @@ def create_deployment(
                         "ApplyOutOfSyncOnly=true",
                     ],
                 },
+                "ignoreDifferences": [
+                    {
+                        "jsonPointers": [
+                            "/spec/syncPolicy",
+                            "/spec/source/targetRevision",
+                        ],
+                    },
+                ],
             },
         }
 
