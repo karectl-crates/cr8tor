@@ -9,7 +9,7 @@ from cr8tor.utils import log
 
 import cr8tor.airlock.resourceops as project_resources
 import cr8tor.airlock.schema as schemas
-from cr8tor.models.identity import ProjectSpec, AppConfig, ProfileConfig, UserSpec
+from cr8tor.models.identity import ProjectSpec, AppConfig, ProfileConfig, UserSpec, GroupSpec
 
 app = typer.Typer()
 
@@ -252,7 +252,7 @@ def create_deployment(
             username=username,
             email=email,
             enabled=True,
-            groups=[project_name],  # Add user to project group
+            groups=[project_name, f"{project_name}-analyst"],  # Add user to project and analyst groups
             keycloak={"firstName": requesting_agent_props.name.split()[0] if " " in requesting_agent_props.name else requesting_agent_props.name, "lastName": requesting_agent_props.name.split()[-1] if " " in requesting_agent_props.name else ""},
             jupyterhub={"admin": False},
             karectl={"organization": requesting_agent_props.affiliation.name},
@@ -319,9 +319,93 @@ def create_deployment(
         log.info(f"✗ Failed to write User CRD file: {e}", err=True)
         raise typer.Exit(1)
 
+    ###############################################################################
+    # Create Group CRDs for project access control
+    ###############################################################################
+
+    group_definitions = [
+        {
+            "name": project_name,
+            "spec": GroupSpec(
+                description=f"{project_name} project group",
+                projects=[project_name],
+                members=[username],
+                subgroups=[f"{project_name}-admin", f"{project_name}-analyst"],
+            ),
+        },
+        {
+            "name": f"{project_name}-admin",
+            "spec": GroupSpec(
+                description=f"{project_name} admin group",
+                projects=[project_name],
+            ),
+        },
+        {
+            "name": f"{project_name}-analyst",
+            "spec": GroupSpec(
+                description=f"{project_name} analyst group",
+                projects=[project_name],
+                members=[username],
+            ),
+        },
+    ]
+
+    group_output_files = []
+    for group_def in group_definitions:
+        group_name = group_def["name"]
+        group_spec = group_def["spec"]
+
+        group_crd = {
+            "apiVersion": "identity.karectl.io/v1alpha1",
+            "kind": "Group",
+            "metadata": {
+                "name": group_name,
+                "labels": {
+                    "cr8tor.io/project-id": project_props.id or "unknown",
+                    "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
+                },
+            },
+            "spec": group_spec.model_dump(exclude_none=True),
+        }
+
+        # Validate against Group CRD schema
+        group_crd_schema_file = crd_schema_dir.joinpath("groups.identity.karectl.io.yaml")
+        if not group_crd_schema_file.exists():
+            log.info(
+                f"Group CRD schema file not found: {group_crd_schema_file}, skipping validation"
+            )
+        else:
+            try:
+                with open(group_crd_schema_file) as f:
+                    group_crd_definition = yaml.safe_load(f)
+                group_openapi_schema = group_crd_definition["spec"]["versions"][0]["schema"][
+                    "openAPIV3Schema"
+                ]
+                jsonschema.validate(instance=group_crd, schema=group_openapi_schema)
+                log.info(f"Group CRD validation passed for {group_name}")
+            except jsonschema.ValidationError as e:
+                log.info(f"Group CRD validation failed for {group_name}: {e.message}", err=True)
+                raise typer.Exit(1)
+            except Exception as e:
+                log.info(f"Group validation error for {group_name}: {e}", err=True)
+                raise typer.Exit(1)
+
+        # Write file for each group
+        group_output_file = output_dir.joinpath(f"group-{group_name}.yaml")
+        try:
+            with open(group_output_file, "w") as f:
+                yaml.dump(group_crd, f, default_flow_style=False, sort_keys=False)
+            log.info(f"Group CRD written to {group_output_file}")
+            group_output_files.append(group_output_file)
+        except Exception as e:
+            log.info(f"Failed to write Group CRD file: {e}", err=True)
+            raise typer.Exit(1)
+
     log.info(f"\n✓ All deployment CRDs created successfully")
     log.info(f"  - Project CRD: {output_file}")
     log.info(f"  - User CRD: {user_output_file}")
+    for gf in group_output_files:
+        log.info(f"  - Group CRD: {gf}")
 
     ###############################################################################
     # Generate ArgoCD Application YAML (app-per-project pattern)
@@ -374,6 +458,8 @@ def create_deployment(
                 },
                 "ignoreDifferences": [
                     {
+                        "group": "argoproj.io",
+                        "kind": "Application",
                         "jsonPointers": [
                             "/spec/syncPolicy",
                             "/spec/source/targetRevision",
