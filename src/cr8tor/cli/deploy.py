@@ -103,30 +103,43 @@ def create_deployment(
     # Create ProjectSpec Pydantic model
     try:
         # Build apps list with default examples
+        project_name = project_props.reference or project_props.id or "unnamed-project"
         apps = [
             AppConfig(
                 name="jupyterhub",
                 type="jupyterhub",
-                url=f"https://jupyter.{project_props.reference or 'project'}.example.com",
-                config={"enabled": True, "auth": "oauth2"},
+                url=f"https://jupyter.{project_name}.example.com",
+                config={"quota": "2CPU", "workspace": f"/{project_name}"},
+            ),
+            AppConfig(
+                name="guacamole",
+                type="vdi",
+                url=f"https://guacamole.{project_name}.example.com",
+                config={"desktop": "ubuntu-mate", "protocol": "rdp", "resolution": "1920x1080"},
             ),
             AppConfig(
                 name="rstudio",
                 type="rstudio",
-                url=f"https://rstudio.{project_props.reference or 'project'}.example.com",
+                url=f"https://rstudio.{project_name}.example.com",
                 config={"enabled": False},
+            ),
+            AppConfig(
+                name="gitea",
+                type="gitea",
+                url=f"https://gitea.{project_name}.example.com",
+                config={"enabled": True, "visibility": "private"},
             ),
         ]
 
         # Build profiles list with default examples
         profiles = [
             ProfileConfig(
-                display_name="Data Science - Python",
-                slug="datascience-python",
-                description="Python-based data science environment with common ML libraries",
+                display_name=f"{project_name.replace('-', ' ').title()} Workspace 1",
+                slug=f"{project_name}-ws1",
+                description="A TRE workspace for federated analysis with Python",
                 kubespawner_override={
-                    "image": "jupyter/datascience-notebook:latest",
-                    "env": {"JUPYTER_ENABLE_LAB": "yes"},
+                    "image": "ghcr.io/karectl/marimo-notebook-workspace:latest",
+                    "env": {"PROJECT_NAME": project_name, "WORKSPACE": f"/{project_name}/ws1"},
                 },
             ),
             ProfileConfig(
