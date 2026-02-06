@@ -398,20 +398,28 @@ def create_deployment(
         # Register in kustomization.yaml
         kustomization_file = argocd_dir.joinpath("kustomization.yaml")
         resource_entry = f"{project_name}.yaml"
-        if kustomization_file.exists():
-            try:
+        try:
+            if kustomization_file.exists():
                 with open(kustomization_file) as f:
                     kustomization = yaml.safe_load(f) or {}
-                resources = kustomization.get("resources", [])
-                if resource_entry not in resources:
-                    resources.append(resource_entry)
-                    kustomization["resources"] = resources
-                    with open(kustomization_file, "w") as f:
-                        yaml.dump(kustomization, f, default_flow_style=False, sort_keys=False)
-                    log.info(f"Registered {resource_entry} in kustomization.yaml")
-            except Exception as e:
-                log.info(f"Failed to update kustomization.yaml: {e}", err=True)
-                raise typer.Exit(1)
+            else:
+                kustomization = {
+                    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+                    "kind": "Kustomization",
+                    "namespace": "argocd",
+                    "resources": [],
+                }
+
+            resources = kustomization.get("resources", [])
+            if resource_entry not in resources:
+                resources.append(resource_entry)
+                kustomization["resources"] = resources
+                with open(kustomization_file, "w") as f:
+                    yaml.dump(kustomization, f, default_flow_style=False, sort_keys=False)
+                log.info(f"Registered {resource_entry} in kustomization.yaml")
+        except Exception as e:
+            log.info(f"Failed to update kustomization.yaml: {e}", err=True)
+            raise typer.Exit(1)
 
         log.info(f"ArgoCD app: {argocd_output_file}")
     else:
