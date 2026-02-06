@@ -3,7 +3,7 @@ import typer
 import yaml
 import jsonschema
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 from datetime import datetime
 from cr8tor.utils import log
 
@@ -34,6 +34,24 @@ def create_deployment(
             default="-s", help="Directory containing CRD schema definitions."
         ),
     ] = "./crds/generated",
+    argocd_dir: Annotated[
+        Optional[Path],
+        typer.Option(
+            help="Output directory for argocd Application YAML."
+        ),
+    ] = None,
+    repo_url: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Git repo URL for argocd source (for --argocd-dir)."
+        ),
+    ] = None,
+    source_path: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Path within the git repo to the CRDs directory (for --argocd-dir)."
+        ),
+    ] = None,
 ):
     """
     Create Kubernetes deployment CRDs from project resources.
@@ -304,3 +322,105 @@ def create_deployment(
     log.info(f"\n✓ All deployment CRDs created successfully")
     log.info(f"  - Project CRD: {output_file}")
     log.info(f"  - User CRD: {user_output_file}")
+
+    ###############################################################################
+    # Generate ArgoCD Application YAML (app-per-project pattern)
+    ###############################################################################
+
+    if argocd_dir is not None:
+        if not repo_url:
+            log.info(f"--repo-url is required when using --argocd-dir", err=True)
+            raise typer.Exit(1)
+        if not source_path:
+            log.info(f"--source-path is required when using --argocd-dir", err=True)
+            raise typer.Exit(1)
+
+        argocd_app = {
+            "apiVersion": "argoproj.io/v1alpha1",
+            "kind": "Application",
+            "metadata": {
+                "name": f"cr8tor-{project_name}",
+                "namespace": "argocd",
+                "labels": {
+                    "cr8tor.io/project-id": project_props.id or "unknown",
+                    "cr8tor.io/managed-by": "cr8tor",
+                    "app.kubernetes.io/part-of": "cr8tor-projects",
+                },
+                "annotations": {
+                    "cr8tor.io/dar-reference": project_name,
+                    "cr8tor.io/created-at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+                },
+            },
+            "spec": {
+                "project": "default",
+                "source": {
+                    "repoURL": repo_url,
+                    "targetRevision": "main",
+                    "path": source_path,
+                },
+                "destination": {
+                    "server": "https://kubernetes.default.svc",
+                    "namespace": "keycloak",
+                },
+                "syncPolicy": {
+                    "automated": {
+                        "prune": True,
+                        "selfHeal": True,
+                    },
+                    "syncOptions": [
+                        "CreateNamespace=false",
+                        "ApplyOutOfSyncOnly=true",
+                    ],
+                },
+                "ignoreDifferences": [
+                    {
+                        "jsonPointers": [
+                            "/spec/syncPolicy",
+                            "/spec/source/targetRevision",
+                        ],
+                    },
+                ],
+            },
+        }
+
+        argocd_dir = Path(argocd_dir)
+        argocd_dir.mkdir(parents=True, exist_ok=True)
+        argocd_output_file = argocd_dir.joinpath(f"{project_name}.yaml")
+        try:
+            with open(argocd_output_file, "w") as f:
+                yaml.dump(argocd_app, f, default_flow_style=False, sort_keys=False)
+            log.info(f"ArgoCD application written to {argocd_output_file}")
+
+        except Exception as e:
+            log.info(f"Failed to write ArgoCD application file: {e}", err=True)
+            raise typer.Exit(1)
+
+        # Register in kustomization.yaml
+        kustomization_file = argocd_dir.joinpath("kustomization.yaml")
+        resource_entry = f"{project_name}.yaml"
+        try:
+            if kustomization_file.exists():
+                with open(kustomization_file) as f:
+                    kustomization = yaml.safe_load(f) or {}
+            else:
+                kustomization = {
+                    "apiVersion": "kustomize.config.k8s.io/v1beta1",
+                    "kind": "Kustomization",
+                    "namespace": "argocd",
+                    "resources": [],
+                }
+
+            resources = kustomization.get("resources", [])
+            if resource_entry not in resources:
+                resources.append(resource_entry)
+                kustomization["resources"] = resources
+                with open(kustomization_file, "w") as f:
+                    yaml.dump(kustomization, f, default_flow_style=False, sort_keys=False)
+                log.info(f"Registered {resource_entry} in kustomization.yaml")
+        except Exception as e:
+            log.info(f"Failed to update kustomization.yaml: {e}", err=True)
+            raise typer.Exit(1)
+
+        log.info(f"ArgoCD app: {argocd_output_file}")
+    else:
+        log.info(f"\n (Skipping ArgoCD application generation)")
