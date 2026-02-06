@@ -119,7 +119,13 @@ jobs:
                     else
                       # run cr8tor create-deployment and capture the error message
                       set +e
-                      errorMessage=$(cr8tor create-deployment -i ./resources -o ./resources/deployment/crds -s ./resources/deployment/models 2>&1)
+                      errorMessage=$(cr8tor create-deployment \
+                        -i ./resources \
+                        -o ./resources/deployment/crds \
+                        -s ./resources/deployment/models \
+                        --argocd-dir ../../appsets \
+                        --repo-url https://github.com/${{ github.repository }}.git \
+                        --source-path projects/${{ inputs.project }}/resources/deployment/crds 2>&1)
                       exitCode=$?
                       set -e
                       if [ $exitCode -ne 0 ]; then
@@ -135,13 +141,20 @@ jobs:
               run: |
                 git config --global user.name "${{ github.repository_owner }} Governance Actions"
                 git config --global user.email "${{ github.repository_owner }}-actions@github.com"
-                
+
                 cd ./projects/${{ inputs.project }}
 
                 echo "Contents of current directory:"
                 ls -l
 
                 git add ./bagit ./resources ./config.toml
+
+                # Add ArgoCD application manifest
+                cd ../..
+                if [ -d "./appsets" ]; then
+                  git add ./appsets/
+                fi
+
                 git commit -m "Update after create and validate action"
                 git push origin ${{ steps.create_branch.outputs.branch_name }}
 
