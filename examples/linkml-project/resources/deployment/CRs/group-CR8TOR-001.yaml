@@ -1,0 +1,17 @@
+apiVersion: identity.karectl.io/v1alpha1
+kind: Group
+metadata:
+  name: CR8TOR-001
+  labels:
+    cr8tor.io/project-id: b0732f87-d663-4dd4-9ae9-780fd961c56d
+    cr8tor.io/created-at: '20260212'
+spec:
+  description: CR8TOR-001 project group
+  attributes: {}
+  members:
+  - alice
+  projects:
+  - CR8TOR-001
+  subgroups:
+  - CR8TOR-001-admin
+  - CR8TOR-001-analyst

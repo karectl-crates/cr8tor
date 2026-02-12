@@ -2,9 +2,17 @@ import typer
 import cr8tor.airlock.schema as schemas
 import cr8tor.cli.build as ro_crate_builder
 import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
+# Import LinkML Pydantic models for Actions
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    CreateAction,
+    AssessAction,
+    ActionStatusType,
+)
 
 
 def close_create_action_command(
@@ -12,7 +20,7 @@ def close_create_action_command(
     start_time: datetime,
     project_id: str,
     agent: str,
-    project_resource_path: Path,
+    governance_path: Path,
     resources_dir: Path,
     exit_msg: str,
     exit_code: int,
@@ -22,18 +30,19 @@ def close_create_action_command(
     config_file: Optional[Path] = "./config.toml",
 ):
     """
-    CreateAction
+    CreateAction - updated to work with LinkML YAML resources
     """
 
     if exit_code == schemas.Cr8torReturnCode.SUCCESS:
-        status_type = schemas.ActionStatusType.COMPLETED
+        status_type = ActionStatusType.CompletedActionStatus
         err = None
     else:
-        status_type = schemas.ActionStatusType.FAILED
+        status_type = ActionStatusType.FailedActionStatus
         err = exit_msg
 
-    action_props = schemas.CreateActionProps(
+    action_props = CreateAction(
         id=f"{command_type}-{project_id}",
+        type="CreateAction",
         name=f"{command_type} Data Project Action",
         start_time=start_time,
         end_time=datetime.now(),
@@ -41,15 +50,41 @@ def close_create_action_command(
         agent=agent,
         error=err,
         instrument=instrument,
-        result=result,
+        result=[str(r.get("@id", r)) if isinstance(r, dict) else str(r) for r in result] if result else [],
     )
 
-    project_resources.delete_resource_entity(
-        project_resource_path, "actions", "id", f"{command_type}-{project_id}"
-    )
-    project_resources.update_resource_entity(
-        project_resource_path, "actions", action_props.model_dump()
-    )
+    # Delete existing action with same ID, then append the new one
+    # Using raw YAML operations since we're working with the actions list
+    try:
+        raw_data = linkml_ops.read_yaml_raw(governance_path)
+        
+        # Initialize project.actions if it doesn't exist
+        if 'project' not in raw_data:
+            raw_data['project'] = {}
+        if 'actions' not in raw_data['project']:
+            raw_data['project']['actions'] = []
+        
+        # Remove any existing action with the same ID
+        raw_data['project']['actions'] = [
+            action for action in raw_data['project']['actions']
+            if action.get('id') != f"{command_type}-{project_id}"
+        ]
+        
+        # Append the new action
+        raw_data['project']['actions'].append(action_props.model_dump(mode='json', exclude_none=True))
+        
+        # Save updated data
+        import yaml
+        with open(governance_path, 'w') as f:
+            yaml.dump(raw_data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+            
+    except Exception as e:
+        # Fall back to simple append if there's an error
+        linkml_ops.append_to_list_field(
+            governance_path,
+            "project.actions",
+            action_props.model_dump(mode='json', exclude_none=True)
+        )
 
     ro_crate_builder.build(resources_dir, config_file, dryrun)
     exit_command(command_type, exit_code, exit_msg)
@@ -73,14 +108,15 @@ def close_assess_action_command(
     """
 
     if exit_code == schemas.Cr8torReturnCode.SUCCESS:
-        status_type = schemas.ActionStatusType.COMPLETED
+        status_type = ActionStatusType.CompletedActionStatus
         err = None
     else:
-        status_type = schemas.ActionStatusType.FAILED
+        status_type = ActionStatusType.FailedActionStatus
         err = exit_msg
 
-    action_props = schemas.AssessActionProps(
+    action_props = AssessAction(
         id=f"{command_type}-{project_id}",
+        type="AssessAction",
         name=f"{command_type} Data Project Action",
         start_time=start_time,
         end_time=datetime.now(),
@@ -89,7 +125,7 @@ def close_assess_action_command(
         error=err,
         instrument=instrument,
         additional_type=additional_type,
-        result=result,
+        result=[str(r.get("@id", r)) if isinstance(r, dict) else str(r) for r in result] if result else [],
     )
 
     #
@@ -98,12 +134,39 @@ def close_assess_action_command(
     # actions is updated with the new action entity
     #
 
-    project_resources.delete_resource_entity(
-        project_resource_path, "actions", "id", f"{command_type}-{project_id}"
-    )
-    project_resources.update_resource_entity(
-        project_resource_path, "actions", action_props.model_dump()
-    )
+    # Delete existing action with same ID, then append the new one
+    # Using raw YAML operations since we're working with the actions list
+    governance_path = project_resource_path  # Assuming this is governance path
+    try:
+        raw_data = linkml_ops.read_yaml_raw(governance_path)
+        
+        # Initialize project.actions if it doesn't exist
+        if 'project' not in raw_data:
+            raw_data['project'] = {}
+        if 'actions' not in raw_data['project']:
+            raw_data['project']['actions'] = []
+        
+        # Remove any existing action with the same ID
+        raw_data['project']['actions'] = [
+            action for action in raw_data['project']['actions']
+            if action.get('id') != f"{command_type}-{project_id}"
+        ]
+        
+        # Append the new action
+        raw_data['project']['actions'].append(action_props.model_dump(mode='json', exclude_none=True))
+        
+        # Save updated data
+        import yaml
+        with open(governance_path, 'w') as f:
+            yaml.dump(raw_data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+            
+    except Exception as e:
+        # Fall back to simple append if there's an error
+        linkml_ops.append_to_list_field(
+            governance_path,
+            "project.actions",
+            action_props.model_dump(mode='json', exclude_none=True)
+        )
 
     ro_crate_builder.build(resources_dir)
     exit_command(command_type, exit_code, exit_msg)

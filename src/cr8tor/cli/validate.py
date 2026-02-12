@@ -3,75 +3,114 @@ import typer
 import asyncio
 import cr8tor.airlock.api_client as api
 import cr8tor.airlock.schema as schemas
-import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.crate_graph as proj_graph
 import cr8tor.cli.utils as cli_utils
 
 from pathlib import Path
 from typing import Annotated, List, Tuple, Optional
 from datetime import datetime
+from cr8tor.utils import log
+
+# Import LinkML Pydantic models
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+    Ingress,
+    Dataset,
+    Table,
+    Column,
+)
 
 app = typer.Typer()
 
 
 def merge_metadata_into_dataset(
-    resource_path: Path, metadata: schemas.DatasetMetadata
+    ingress_path: Path, dataset_name: str, metadata: schemas.DatasetMetadata
 ) -> None:
-    resource_data = project_resources.read_resource(resource_path)
-
-    if "tables" not in resource_data:
-        resource_data["tables"] = []
-
-    table_lookup = {table["name"]: table for table in resource_data["tables"]}
-
+    """Merge validated metadata into the ingress YAML file for a specific dataset."""
+    # Load the ingress YAML as Pydantic model
+    ingress = linkml_ops.load_yaml_as_pydantic(ingress_path, Ingress)
+    
+    # Find the dataset by name
+    target_dataset = None
+    if ingress.datasets:
+        for ds in ingress.datasets:
+            if ds.name == dataset_name:
+                target_dataset = ds
+                break
+    
+    if not target_dataset:
+        # Dataset not found, skip merge
+        return
+    
+    # Initialize tables if not present
+    if not target_dataset.tables:
+        target_dataset.tables = []
+    
+    table_lookup = {table.name: table for table in target_dataset.tables}
+    
+    # Merge metadata tables into the dataset
     for meta_table in metadata.tables or []:
         if meta_table.name in table_lookup:
             existing_table = table_lookup[meta_table.name]
-            existing_columns = existing_table.setdefault("columns", [])
-            if meta_table.description:
-                existing_table["description"] = meta_table.description
-
-            existing_col_lookup = {col["name"]: col for col in existing_columns}
-
+            if not existing_table.columns:
+                existing_table.columns = []
+            
+            # Update description if provided
+            if meta_table.description and not existing_table.description:
+                existing_table.description = meta_table.description
+            
+            existing_col_lookup = {col.name: col for col in existing_table.columns}
+            
             for meta_col in meta_table.columns or []:
                 if meta_col.name not in existing_col_lookup:
-                    new_col = {"name": meta_col.name}
-                    if meta_col.datatype:
-                        new_col["datatype"] = meta_col.datatype
-                    if meta_col.description:
-                        new_col["description"] = meta_col.description
-                    existing_columns.append(new_col)
+                    # Add new column
+                    new_col = Column(
+                        name=meta_col.name,
+                        datatype=meta_col.datatype or "string",
+                        description=meta_col.description
+                    )
+                    existing_table.columns.append(new_col)
                 else:
+                    # Update existing column if fields are missing
                     existing_col = existing_col_lookup[meta_col.name]
-                    if meta_col.description and "description" not in existing_col:
-                        existing_col["description"] = meta_col.description
-                    if meta_col.datatype and "datatype" not in existing_col:
-                        existing_col["datatype"] = meta_col.datatype
-
+                    if meta_col.description and not existing_col.description:
+                        existing_col.description = meta_col.description
+                    if meta_col.datatype and not existing_col.datatype:
+                        existing_col.datatype = meta_col.datatype
         else:
-            new_table = {"name": meta_table.name}
+            # Add new table
+            new_columns = []
             if meta_table.columns:
-                new_table["columns"] = []
                 for col in meta_table.columns:
-                    col_dict = {"name": col.name}
-                    if col.datatype:
-                        col_dict["datatype"] = col.datatype
-                    if col.description:
-                        col_dict["description"] = col.description
-                    new_table["columns"].append(col_dict)
-
-            resource_data["tables"].append(new_table)
-
-    if metadata.description:
-        resource_data["description"] = metadata.description
-
-    project_resources.update_resource(resource_path, resource_data)
+                    new_columns.append(
+                        Column(
+                            name=col.name,
+                            datatype=col.datatype or "string",
+                            description=col.description
+                        )
+                    )
+            
+            new_table = Table(
+                name=meta_table.name,
+                description=meta_table.description,
+                columns=new_columns if new_columns else None
+            )
+            target_dataset.tables.append(new_table)
+    
+    # Update dataset description if provided
+    if metadata.description and not target_dataset.description:
+        target_dataset.description = metadata.description
+    
+    # Save the updated ingress model back to YAML
+    linkml_ops.save_pydantic_as_yaml(ingress_path, ingress)
 
 
 def verify_tables_metadata(
     remote_metadata: List[schemas.TableMetadata],
-    local_metadata: List[schemas.TableMetadata],
+    local_metadata: Optional[List[Table]],
 ) -> Tuple[bool, Optional[str]]:
+    """Verify that local table metadata matches remote schema."""
     remote_lookup = {
         table.name: {col.name for col in table.columns} for table in remote_metadata
     }
@@ -144,75 +183,146 @@ def validate(
     exit_code = schemas.Cr8torReturnCode.SUCCESS
 
     start_time = datetime.now()
-    access_resource_path = resources_dir.joinpath("access", "access.toml")
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    project_dict = project_resources.read_resource_entity(
-        project_resource_path, "project"
-    )
-    project_info = schemas.ProjectProps(**project_dict)
+    
+    # Load LinkML-based governance and ingress YAML files
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    ingress_path = resources_dir.joinpath("data", "cr8-ingress.yaml")
+    
+    try:
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+        ingress = linkml_ops.load_yaml_as_pydantic(ingress_path, Ingress)
+    except Exception as e:
+        raise ValueError(f"Error loading project resources: {str(e)}")
+    
+    project_info = governance.project
+    project_id = project_info.id if project_info.id else project_info.reference
 
     current_rocrate_graph = proj_graph.ROCrateGraph(bagit_dir)
     if not current_rocrate_graph.is_project_action_complete(
         command_type=schemas.Cr8torCommandType.CREATE,
         action_type=schemas.RoCrateActionType.CREATE,
-        project_id=project_info.id,
+        project_id=project_id,
     ):
         cli_utils.close_assess_action_command(
             command_type=schemas.Cr8torCommandType.VALIDATE,
             start_time=start_time,
-            project_id=project_info.id,
+            project_id=project_id,
             agent=agent,
-            project_resource_path=project_resource_path,
+            project_resource_path=governance_path,
             resources_dir=resources_dir,
             exit_msg="The create command must be run on the target project before validation",
             exit_code=schemas.Cr8torReturnCode.ACTION_WORKFLOW_ERROR,
             instrument=os.getenv("METADATA_NAME"),
         )
 
-    for dataset_meta_file in resources_dir.joinpath("metadata").glob("dataset_*.toml"):
-        try:
-            access = project_resources.read_resource(access_resource_path)
-            dataset_meta = project_resources.read_resource(dataset_meta_file)
-            source_data = {}
-            source_data["source"] = access["source"].copy()
-            source_data["source"]["type"] = source_data["source"]["type"].lower()
-            source_data["source"]["credentials"] = access["credentials"]
-            source_data["extract_config"] = (
-                access["extract_config"] if "extract_config" in access else None
-            )
-            access_contract = schemas.DataContractValidateRequest(
-                project_name=project_dict["project_name"],
-                project_start_time=project_dict["project_start_time"],
-                destination=project_dict["destination"],
-                source=source_data["source"],
-                extract_config=source_data.get("extract_config"),
-                dataset=schemas.DatasetMetadata(**dataset_meta),
-            )
-            metadata = asyncio.run(api.validate_access(access_contract))
-            validate_dataset_info = schemas.DatasetMetadata(**metadata)
+    # Validate each dataset in the ingress configuration
+    if ingress.datasets:
+        for dataset in ingress.datasets:
+            try:
+                # Build the validation request from LinkML models
+                # Convert LinkML Dataset to old schema format for API compatibility
+                dataset_meta_dict = {
+                    "name": dataset.name,
+                    "schema_name": dataset.schema_name,
+                    "description": dataset.description if hasattr(dataset, 'description') else None,
+                    "tables": [],
+                }
+                
+                if dataset.tables:
+                    for table in dataset.tables:
+                        table_dict = {
+                            "name": table.name,
+                            "description": table.description if hasattr(table, 'description') else None,
+                            "columns": [],
+                        }
+                        if table.columns:
+                            for col in table.columns:
+                                col_dict = {
+                                    "name": col.name,
+                                    "datatype": col.datatype,
+                                }
+                                if hasattr(col, 'description') and col.description:
+                                    col_dict["description"] = col.description
+                                table_dict["columns"].append(col_dict)
+                        dataset_meta_dict["tables"].append(table_dict)
+                
+                # Build source data from ingress model
+                source_data = {}
+                if ingress.source:
+                    # Add required fields for discriminated union
+                    if hasattr(ingress.source, 'type') and ingress.source.type:
+                        source_data["type"] = ingress.source.type
+                    if hasattr(ingress.source, 'url') and ingress.source.url:
+                        source_data["host_url"] = ingress.source.url  # Map url to host_url for compatibility
+                    if hasattr(ingress.source, 'name') and ingress.source.name:
+                        source_data["database"] = ingress.source.name  # Map name to database for SQL sources
+                    
+                    # Add default port if not specified (required field)
+                    source_data["port"] = 5432  # Default PostgreSQL port, adjust based on type if needed
+                    
+                    # Add credentials if present
+                    if hasattr(ingress.source, 'credentials') and ingress.source.credentials:
+                        source_data["credentials"] = {
+                            "provider": ingress.source.credentials.provider,
+                            "password_key": ingress.source.credentials.password_key,
+                            "username_key": ingress.source.credentials.username_key,
+                        }
+                    else:
+                        # Provide default empty credentials if not present (required field)
+                        source_data["credentials"] = {
+                            "provider": "",
+                            "password_key": "",
+                            "username_key": "",
+                        }
+                
+                # Build access contract for validation
+              
+              
+               
 
-        except Exception as e:
-            cli_utils.close_assess_action_command(
-                command_type=schemas.Cr8torCommandType.VALIDATE,
-                start_time=start_time,
-                project_id=project_info.id,
-                agent=agent,
-                project_resource_path=project_resource_path,
-                resources_dir=resources_dir,
-                exit_msg=f"{str(e)}",
-                exit_code=schemas.Cr8torReturnCode.UNKNOWN_ERROR,
-                instrument=os.getenv("METADATA_NAME"),
+                access_contract = schemas.DataContractValidateRequest(
+                    project_name=project_info.name,
+                    project_start_time=project_info.start_time if project_info.start_time else datetime.now().isoformat(),
+                    destination={
+                        "type": ingress.destination.type if hasattr(ingress.destination.type, 'value') else str(ingress.destination.type),
+                        "url": ingress.destination.url if ingress.destination.url else "",
+                    },
+                    source=source_data if source_data else {},
+                    extract_config=None,
+                    dataset=schemas.DatasetMetadata(**dataset_meta_dict),
+                )
+                
+                log.info(f"YOYO")
+                log.info(f"{access_contract}")
+                
+                metadata = asyncio.run(api.validate_access(access_contract))
+
+                log.info(f"RESP: {metadata}")
+
+                validate_dataset_info = schemas.DatasetMetadata(**metadata)
+
+            except Exception as e:
+                cli_utils.close_assess_action_command(
+                    command_type=schemas.Cr8torCommandType.VALIDATE,
+                    start_time=start_time,
+                    project_id=project_id,
+                    agent=agent,
+                    project_resource_path=governance_path,
+                    resources_dir=resources_dir,
+                    exit_msg=f"{str(e)}",
+                    exit_code=schemas.Cr8torReturnCode.UNKNOWN_ERROR,
+                    instrument=os.getenv("METADATA_NAME"),
+                )
+
+            is_valid, err = verify_tables_metadata(
+                validate_dataset_info.tables, dataset.tables
             )
+            if not is_valid:
+                exit_msg = err
+                exit_code = schemas.Cr8torReturnCode.VALIDATION_ERROR
+                break
 
-        is_valid, err = verify_tables_metadata(
-            validate_dataset_info.tables, access_contract.dataset.tables
-        )
-        if not is_valid:
-            exit_msg = err
-            exit_code = schemas.Cr8torReturnCode.VALIDATION_ERROR
-            break
-
-        merge_metadata_into_dataset(dataset_meta_file, validate_dataset_info)
+            merge_metadata_into_dataset(ingress_path, dataset.name, validate_dataset_info)
     #
     # This assumes validate can be run multiple times on a project
     # Ensures previous run entities for this action are cleared in "actions" before
@@ -222,9 +332,9 @@ def validate(
     cli_utils.close_assess_action_command(
         command_type=schemas.Cr8torCommandType.VALIDATE,
         start_time=start_time,
-        project_id=project_info.id,
+        project_id=project_id,
         agent=agent,
-        project_resource_path=project_resource_path,
+        project_resource_path=governance_path,
         resources_dir=resources_dir,
         exit_msg=exit_msg,
         exit_code=exit_code,

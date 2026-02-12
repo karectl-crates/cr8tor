@@ -1,0 +1,76 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: groups.identity.karectl.io
+spec:
+  group: identity.karectl.io
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              description:
+                type: string
+                description: Human-readable description of the group
+                default: ''
+              attributes:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              members:
+                type: array
+                items:
+                  type: string
+              projects:
+                type: array
+                items:
+                  type: string
+              subgroups:
+                type: array
+                items:
+                  type: string
+          status:
+            type: object
+            properties:
+              phase:
+                type: string
+              conditions:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    status:
+                      type: string
+                    reason:
+                      type: string
+                    message:
+                      type: string
+                    lastTransitionTime:
+                      type: string
+                      format: date-time
+                  required:
+                  - type
+                  - status
+                  - reason
+                  - message
+              observedGeneration:
+                type: integer
+            additionalProperties: true
+        required:
+        - spec
+    subresources:
+      status: {}
+  scope: Namespaced
+  names:
+    plural: groups
+    singular: group
+    kind: Group
+    shortNames:
+    - gro
