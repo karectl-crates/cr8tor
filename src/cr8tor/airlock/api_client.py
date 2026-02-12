@@ -9,7 +9,7 @@ from cr8tor.airlock.schema import (
     DataContractValidateRequest,
     DataContractTransferRequest,
 )
-
+from cr8tor.utils import log
 
 class HTTPResponse(BaseModel, frozen=True):
     status: Literal["success", "error"]
@@ -36,7 +36,12 @@ class ErrorResponse(BaseModel):
 
 class APIClient:
     def __init__(self, base_url: str, token: str, port: Optional[int] = None):
-        self.base_url = f"{base_url}:{port}" if port else base_url
+        
+        use_ports = os.getenv("USE_CUSTOM_PORTS", "false").lower() == "true"
+
+        log.info(f"USE_CUSTOM_PORTS: {use_ports}")
+
+        self.base_url = f"{base_url}:{port}" if use_ports else base_url
         self.token = token
         # TODO: the micro service endpoints are http, not https yet. We need verify=False
         self.client = httpx.AsyncClient(

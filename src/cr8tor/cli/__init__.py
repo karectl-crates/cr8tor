@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+metamodel_src = Path(__file__).parent.parent.parent.parent / "metamodel" / "src"
+if metamodel_src.exists() and str(metamodel_src) not in sys.path:
+    sys.path.insert(0, str(metamodel_src))
+
 import typer
 from typing_extensions import Annotated
 from cr8tor.cli.create import app as create_command

@@ -18,9 +18,12 @@ def _sanitise_label(value: str) -> str:
     return value[:63] or "unknown"
 
 
-import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.schema as schemas
 from cr8tor.models.identity import ProjectSpec, AppConfig, ProfileConfig, UserSpec, GroupSpec
+
+# Import LinkML Pydantic models
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import Governance
 
 app = typer.Typer()
 
@@ -87,22 +90,20 @@ def create_deployment(
         log.info(f"✗ Resources directory not found: {resources_dir}", err=True)
         raise typer.Exit(1)
 
-    # Detect project.toml in governance directory
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    if not project_resource_path.exists():
+    # Load governance YAML
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    if not governance_path.exists():
         log.info(
-            f"✗ Project metadata file not found: {project_resource_path}", err=True
+            f"✗ Governance file not found: {governance_path}", err=True
         )
         raise typer.Exit(1)
 
-    log.info(f"Reading project metadata from {project_resource_path}")
+    log.info(f"Reading project metadata from {governance_path}")
 
-    # Read project data using resourceops API
+    # Read project data using linkml_ops
     try:
-        project_dict = project_resources.read_resource_entity(
-            project_resource_path, "project"
-        )
-        project_props = schemas.ProjectProps(**project_dict)
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+        project_props = governance.project
     except Exception as e:
         log.info(f"✗ Failed to read project metadata: {e}", err=True)
         raise typer.Exit(1)
@@ -245,41 +246,26 @@ def create_deployment(
     # Create User CRD from requesting_agent
     ###############################################################################
 
-    # Read requesting_agent data from project.toml
-    try:
-        requesting_agent_dict = project_resources.read_resource_entity(
-            project_resource_path, "requesting_agent"
-        )
-        requesting_agent_props = schemas.AgentProps(**requesting_agent_dict)
-    except Exception as e:
-        log.info(f"⚠ Failed to read requesting_agent metadata: {e}")
+    # Read requesting_agent data from governance
+    if not governance.users or len(governance.users) == 0:
+        log.info(f"⚠ No requesting_agent (users) in governance metadata")
         log.info(f"  Skipping User CRD generation")
         return
 
-    log.info(f"\n✓ Loaded requesting agent: {requesting_agent_props.name}")
+    # Use the first user as the requesting agent
+    requesting_agent = governance.users[0]
+    log.info(f"\n✓ Loaded requesting agent: {requesting_agent.username}")
 
     # Create UserSpec from requesting_agent
     try:
-        # Extract username from email or name
-        username = (
-            requesting_agent_props.name.lower()
-            .replace(" ", ".")
-            .replace("prof.", "")
-            .replace("dr.", "")
-            .strip()
-        )
-
-        # Generate email if not present in name
-        email = f"{username}@{requesting_agent_props.affiliation.name.lower().replace(' ', '')}.com"
-
         user_spec = UserSpec(
-            username=username,
-            email=email,
+            username=requesting_agent.username,
+            email=requesting_agent.email,
             enabled=True,
             groups=[project_name, f"{project_name}-analyst"],  # Add user to project and analyst groups
-            keycloak={"firstName": requesting_agent_props.name.split()[0] if " " in requesting_agent_props.name else requesting_agent_props.name, "lastName": requesting_agent_props.name.split()[-1] if " " in requesting_agent_props.name else ""},
+            keycloak={"firstName": requesting_agent.given_name, "lastName": requesting_agent.family_name},
             jupyterhub={"admin": False},
-            k8tre={"organization": requesting_agent_props.affiliation.name},
+            k8tre={"organization": requesting_agent.affiliation if requesting_agent.affiliation else "Unknown"},
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
@@ -293,7 +279,7 @@ def create_deployment(
         "apiVersion": "identity.k8tre.io/v1alpha1",
         "kind": "User",
         "metadata": {
-            "name": username,
+            "name": requesting_agent.username,
             "labels": {
                 "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                 "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
@@ -332,7 +318,7 @@ def create_deployment(
             raise typer.Exit(1)
 
     # Write User CRD to file
-    user_output_file = output_dir.joinpath(f"user-{username}.yaml")
+    user_output_file = output_dir.joinpath(f"user-{requesting_agent.username}.yaml")
     try:
         with open(user_output_file, "w") as f:
             yaml.dump(user_crd, f, default_flow_style=False, sort_keys=False)
@@ -353,7 +339,7 @@ def create_deployment(
             "spec": GroupSpec(
                 description=f"{project_name} project group",
                 projects=[project_name],
-                members=[username],
+                members=[requesting_agent.username],
                 subgroups=[f"{project_name}-admin", f"{project_name}-analyst"],
             ),
         },
@@ -369,7 +355,7 @@ def create_deployment(
             "spec": GroupSpec(
                 description=f"{project_name} analyst group",
                 projects=[project_name],
-                members=[username],
+                members=[requesting_agent.username],
             ),
         },
     ]
