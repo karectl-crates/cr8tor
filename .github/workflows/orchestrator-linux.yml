@@ -38,6 +38,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                 ref: main
+                submodules: true
 
             - name: Create a new temp branch
               id: create_branch
@@ -283,6 +284,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                 ref: main
+                submodules: true
                 clean: false
 
             - name: Create a new temp branch
@@ -442,6 +444,7 @@ jobs:
               uses: actions/checkout@v4
               with:
                 ref: main
+                submodules: true
                 clean: false
 
             - name: Create a new temp branch
