@@ -1,0 +1,81 @@
+project:
+  name: linkmldementia
+  description: Example linkml cr8tor project for demonstration
+  reference: CR8TOR-005
+  id: 1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+  start_time: '20260213_123754'
+  actions:
+  - id: Create-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: CreateAction
+    name: Create Data Project Action
+    start_time: '2026-02-13T12:37:54.519085'
+    end_time: '2026-02-13T12:37:54.756588'
+    action_status: CompletedActionStatus
+    agent: cli
+    instrument: cr8tor-cli
+    result:
+    - 1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+  - id: Validate-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: AssessAction
+    name: Validate Data Project Action
+    start_time: '2026-02-13T12:38:13.796383'
+    end_time: '2026-02-13T12:38:15.845389'
+    action_status: CompletedActionStatus
+    agent: j.bloggs@cr8tor.co.uk
+    instrument: MetadataService
+    additional_type: Semantic Validation
+  - id: Sign-Off-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: AssessAction
+    name: Sign-Off Data Project Action
+    start_time: '2026-02-13T12:38:37.663397'
+    end_time: '2026-02-13T12:38:38.225082'
+    action_status: CompletedActionStatus
+    agent: cli
+    instrument: cr8-ALL-projects-approver
+    result:
+    - /a/link/to/agreement
+    additional_type: Sign off
+  - id: Stage-Transfer-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: CreateAction
+    name: Stage-Transfer Data Project Action
+    start_time: '2026-02-13T12:38:52.176027'
+    end_time: '2026-02-13T12:38:53.390055'
+    action_status: CompletedActionStatus
+    agent: cli
+    instrument: PublishService
+    result:
+    - b542988c-6e38-4ef3-b365-dc82445b6f42
+  - id: Disclosure-Check-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: AssessAction
+    name: Disclosure-Check Data Project Action
+    start_time: '2026-02-13T12:39:04.197227'
+    end_time: '2026-02-13T12:39:04.742109'
+    action_status: CompletedActionStatus
+    agent: cli
+    instrument: cr8-ALL-projects-approver
+    result:
+    - /a/link/to/disclosure
+    additional_type: Disclosure Check
+  - id: Publish-1eaafb6c-63f1-46f0-ad7e-b59ea5aafc44
+    type: CreateAction
+    name: Publish Data Project Action
+    start_time: '2026-02-13T12:39:16.654364'
+    end_time: '2026-02-13T12:39:18.095328'
+    action_status: CompletedActionStatus
+    agent: cli
+    instrument: PublishService
+    result:
+    - 74af2bfa-9c5c-4f23-b07d-5d4fa27b20a5
+users:
+- id: https://example.org/users/mike
+  username: hardingm
+  given_name: Mike
+  family_name: Harding
+  affiliation: Lancaster University
+  email: m.harding@lancaster.ac.uk
+  groups:
+  - value: researchers
+    display: Research Group
+    type: Manual
+  start_date: '2024-01-01T00:00:00Z'
+  expiry_date: '2026-01-01T00:00:00Z'
