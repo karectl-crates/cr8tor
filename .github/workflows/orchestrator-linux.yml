@@ -66,12 +66,12 @@ jobs:
             - name: Clone cr8tor repository (specific branch)
               if: ${{ inputs.cr8tor_branch != '' }}
               run: |
-                git clone --branch ${{ inputs.cr8tor_branch }} https://github.com/${{ github.repository_owner }}/cr8tor.git
+                git clone --recurse-submodules --branch ${{ inputs.cr8tor_branch }} https://github.com/${{ github.repository_owner }}/cr8tor.git
 
             - name: Clone cr8tor repository (default branch)
               if: ${{ inputs.cr8tor_branch == '' }}
               run: |
-                git clone --branch develop https://github.com/${{ github.repository_owner }}/cr8tor.git
+                git clone --recurse-submodules --branch develop https://github.com/${{ github.repository_owner }}/cr8tor.git
 
             - name: Sync cr8tor repository
               run: |
