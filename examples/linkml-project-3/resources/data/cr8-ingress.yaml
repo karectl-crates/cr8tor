@@ -1,0 +1,26 @@
+source:
+  name: opal-resource-db
+  type: postgresql
+  url: datashield-postgres-cluster-rw.datashield.svc.cluster.local
+  credentials:
+    provider: AzureKeyVault
+    password_key: opal-resource-db-password
+    username_key: opal-resource-db-username
+destination:
+  type: postgresql
+datasets:
+- name: myXYZDataset
+  schema_name: public
+  tables:
+  - name: xyz_source
+    columns:
+    - name: id
+      datatype: UUID
+    - name: value
+      datatype: VARCHAR
+  locations:
+  - postgresql_table_name: linkmldementia_20260213_123754_public.xyz_source
+    opal_resource_name: tre_postgresql_linkmldementia_20260213_123754_public_xyz_source
+    opal_project_name: linkmldementia
+    opal_group_name: linkmldementia_group
+    '@id': 74af2bfa-9c5c-4f23-b07d-5d4fa27b20a5
