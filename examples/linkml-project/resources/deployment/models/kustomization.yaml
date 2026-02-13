@@ -1,8 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-- groups.identity.karectl.io.yaml
-- keycloakclients.identity.karectl.io.yaml
-- projects.research.karectl.io.yaml
-- users.identity.karectl.io.yaml
-- vdiinstances.karectl.io.yaml
