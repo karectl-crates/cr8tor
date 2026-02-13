@@ -76,8 +76,7 @@ jobs:
             - name: Sync cr8tor repository
               run: |
                 uv sync --directory cr8tor
-
-
+            
             - name: Cr8tor CLI Create & Validate
               run: |
                 echo "Current working directory: $(pwd)"
