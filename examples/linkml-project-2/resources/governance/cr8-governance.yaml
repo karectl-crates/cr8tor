@@ -1,7 +1,7 @@
 project:
-  name: linkmlagain
+  name: linkmlETD
   description: Example linkml cr8tor project for demonstration
-  reference: CR8TOR-004
+  reference: CR8TOR-005
 users:
 - id: https://example.org/users/mike
   username: hardingm
