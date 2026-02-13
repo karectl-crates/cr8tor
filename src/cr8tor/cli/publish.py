@@ -133,7 +133,7 @@ def publish(
                 dataset.locations.append(publish_location_dict)
                 
                 # Save updated ingress YAML with publish location
-                linkml_ops.save_pydantic_as_yaml(ingress, ingress_path)
+                linkml_ops.save_pydantic_as_yaml(ingress_path, ingress)
 
     except Exception as e:
         cli_utils.close_create_action_command(

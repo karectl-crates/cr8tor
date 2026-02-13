@@ -1,0 +1,20 @@
+source:
+  name: opal-resource-db
+  type: postgresql
+  url: datashield-postgres-cluster-rw.datashield.svc.cluster.local
+  credentials:
+    provider: AzureKeyVault
+    password_key: opal-resource-db-password
+    username_key: opal-resource-db-username
+destination:
+  type: postgresql
+datasets:
+- name: myXYZDataset
+  schema_name: public
+  tables:
+  - name: xyz_source
+    columns:
+    - name: id
+      datatype: UUID
+    - name: value
+      datatype: VARCHAR
