@@ -1,4 +1,5 @@
 import typer
+import yaml
 import cr8tor.airlock.schema as schemas
 import cr8tor.cli.build as ro_crate_builder
 import cr8tor.airlock.resourceops as project_resources
@@ -6,6 +7,7 @@ import cr8tor.airlock.linkml_ops as linkml_ops
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
+
 
 # Import LinkML Pydantic models for Actions
 from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
@@ -74,7 +76,7 @@ def close_create_action_command(
         raw_data['project']['actions'].append(action_props.model_dump(mode='json', exclude_none=True))
         
         # Save updated data
-        import yaml
+        
         with open(governance_path, 'w') as f:
             yaml.dump(raw_data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
             
