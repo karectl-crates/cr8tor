@@ -51,4 +51,4 @@ dev = [
     "ruff>=0.8.6",
 ]
 [tool.uv.workspace]
-members = ["cr8tor", "cr8tor/metamodel"]
+members = ["cr8tor", "metamodel"]

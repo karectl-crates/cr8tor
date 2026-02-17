@@ -95,7 +95,7 @@ def close_assess_action_command(
     start_time: datetime,
     project_id: str,
     agent: str,
-    project_resource_path: Path,
+    governance_path: Path,
     resources_dir: Path,
     exit_msg: str,
     exit_code: int,
@@ -136,7 +136,6 @@ def close_assess_action_command(
 
     # Delete existing action with same ID, then append the new one
     # Using raw YAML operations since we're working with the actions list
-    governance_path = project_resource_path  # Assuming this is governance path
     try:
         raw_data = linkml_ops.read_yaml_raw(governance_path)
         
@@ -155,10 +154,8 @@ def close_assess_action_command(
         # Append the new action
         raw_data['project']['actions'].append(action_props.model_dump(mode='json', exclude_none=True))
         
-        # Save updated data
-        import yaml
-        with open(governance_path, 'w') as f:
-            yaml.dump(raw_data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+        # Save updated data using centralized write function
+        linkml_ops.write_yaml_raw(governance_path, raw_data)
             
     except Exception as e:
         # Fall back to simple append if there's an error

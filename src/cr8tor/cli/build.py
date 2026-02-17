@@ -94,7 +94,6 @@ def build(
         raise DirectoryNotFoundError(resources_dir)
 
     # Load LinkML-based governance YAML as Pydantic model
-    log.info("HERE")
 
     governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
     try:
