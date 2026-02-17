@@ -139,8 +139,8 @@ def build(
         f"[cyan]Creating RO-Crate for[/cyan] - [bold magenta]{project.name}[/bold magenta]",
     )
 
-    # Get project ID (assuming it exists in the model)
-    project_id = project.id if hasattr(project, 'id') else project.reference
+    # Get project ID: prefer project.id if it has a value, otherwise fall back to reference
+    project_id = project.id if project.id else project.reference
 
     project_entity = m.ContextEntity(
         crate=crate,
