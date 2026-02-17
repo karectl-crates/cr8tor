@@ -156,10 +156,10 @@ def create(
         )
 
     # Set project ID and start time (assuming these fields exist in the Project model)
-    if not hasattr(governance.project, 'id') or not governance.project.id:
+    if governance.project.id is None:
         linkml_ops.update_yaml_field(governance_path, "project.id", project_uuid)
     
-    if not hasattr(governance.project, 'start_time') or not governance.project.start_time:
+    if governance.project.start_time is None:
         linkml_ops.update_yaml_field(
             governance_path,
             "project.start_time",
