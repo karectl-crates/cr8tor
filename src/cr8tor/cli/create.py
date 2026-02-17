@@ -134,7 +134,7 @@ def create(
 
     # Check if project has already been created (assuming project has id attribute)
     if bagit_dir.exists():
-        if governance.project and hasattr(governance.project, 'id') and governance.project.id:
+        if governance.project and governance.project.id:
             current_rocrate_graph = proj_graph.ROCrateGraph(bagit_dir)
             if current_rocrate_graph.is_project_action_complete(
                 command_type=schemas.Cr8torCommandType.CREATE,
