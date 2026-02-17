@@ -236,7 +236,7 @@ def create_deployment(
     ###############################################################################
 
     # Read requesting_agent data from governance
-    if not governance.users or len(governance.users) == 0:
+    if not governance.users:
         log.info(f"⚠ No requesting_agent (users) in governance metadata")
         log.info(f"  Skipping User CRD generation")
         return
