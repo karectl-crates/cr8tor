@@ -276,10 +276,6 @@ def validate(
                         }
                 
                 # Build access contract for validation
-              
-              
-               
-
                 access_contract = schemas.DataContractValidateRequest(
                     project_name=project_info.name,
                     project_start_time=project_info.start_time if project_info.start_time else datetime.now().isoformat(),
