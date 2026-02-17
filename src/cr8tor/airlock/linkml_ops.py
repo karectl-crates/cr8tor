@@ -77,7 +77,7 @@ def save_pydantic_as_yaml(
     )
     
     with open(yaml_path, 'w') as f:
-        yaml.dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+        yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
     
     log.info(
         f"[cyan]Saved model to YAML file:[/cyan] - [bold magenta]{yaml_path}[/bold magenta]"
@@ -104,6 +104,24 @@ def read_yaml_raw(yaml_path: Path) -> Dict[str, Any]:
             f"[red]Resource file missing[/red] - [bold red]{yaml_path}[/bold red]"
         )
         return {"Error": f"The resource file '{yaml_path}' is missing."}
+
+
+def write_yaml_raw(yaml_path: Path, data: Dict[str, Any]) -> None:
+    """
+    Write raw dictionary data to a YAML file using safe_dump for consistency.
+    
+    Args:
+        yaml_path: Path where the YAML file should be saved
+        data: Dictionary data to write to YAML
+    """
+    yaml_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(yaml_path, 'w') as f:
+        yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    
+    log.info(
+        f"[cyan]Saved YAML file:[/cyan] - [bold magenta]{yaml_path}[/bold magenta]"
+    )
 
 
 def update_yaml_field(
@@ -144,7 +162,7 @@ def update_yaml_field(
     
     # Save back to file
     with open(yaml_path, 'w') as f:
-        yaml.dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+        yaml.safe_dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
     
     log.info(
         f"[cyan]Updated field '{field_path}' in:[/cyan] - [bold magenta]{yaml_path}[/bold magenta]"
@@ -217,9 +235,8 @@ def append_to_list_field(
     
     current[keys[-1]].append(item)
     
-    # Save back to file
-    with open(yaml_path, 'w') as f:
-        yaml.dump(data, f, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    # Save back to file using centralized write function
+    write_yaml_raw(yaml_path, data)
     
     log.info(
         f"[cyan]Appended to list field '{field_path}' in:[/cyan] - [bold magenta]{yaml_path}[/bold magenta]"

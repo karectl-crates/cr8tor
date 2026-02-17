@@ -41,7 +41,10 @@ class APIClient:
 
         log.info(f"USE_CUSTOM_PORTS: {use_ports}")
 
-        self.base_url = f"{base_url}:{port}" if use_ports else base_url
+        if use_ports and port is not None:
+            self.base_url = f"{base_url}:{port}"
+        else:
+            self.base_url = base_url
         self.token = token
         # TODO: the micro service endpoints are http, not https yet. We need verify=False
         self.client = httpx.AsyncClient(

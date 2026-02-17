@@ -292,12 +292,8 @@ def validate(
                     dataset=schemas.DatasetMetadata(**dataset_meta_dict),
                 )
                 
-                log.info(f"YOYO")
-                log.info(f"{access_contract}")
-                
                 metadata = asyncio.run(api.validate_access(access_contract))
 
-                log.info(f"RESP: {metadata}")
 
                 validate_dataset_info = schemas.DatasetMetadata(**metadata)
 
