@@ -12,8 +12,15 @@ from cookiecutter.main import cookiecutter
 from cookiecutter.exceptions import OutputDirExistsException, FailedHookException
 from cr8tor.utils import log
 import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.schema as schemas
 import cr8tor.airlock.gh_rest_api_client as gh_rest_api_client
+
+# Import LinkML Pydantic models
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+    Project,
+)
 
 app = typer.Typer()
 
@@ -167,9 +174,9 @@ def initiate(
             # Use explicitly provided project directory
             project_dir_path = Path(project_dir).resolve()
         elif project_name:
-            # Check if current directory is the project (has resources/governance/project.toml)
+            # Check if current directory is the project (has resources/governance/cr8-governance.yaml)
             current_dir = Path.cwd()
-            if (current_dir / "resources" / "governance" / "project.toml").exists():
+            if (current_dir / "resources" / "governance" / "cr8-governance.yaml").exists():
                 project_dir_path = current_dir
                 log.info(f"Detected project in current directory: {project_dir_path}")
             else:
@@ -183,7 +190,7 @@ def initiate(
             )
         
         # Verify it's a valid project directory
-        project_resources_path = project_dir_path / "resources" / "governance" / "project.toml"
+        project_resources_path = project_dir_path / "resources" / "governance" / "cr8-governance.yaml"
         if not project_resources_path.exists():
             raise typer.BadParameter(
                 f"Invalid project directory. Missing: {project_resources_path}"
@@ -247,11 +254,23 @@ def initiate(
                 project_dir = Path.cwd() / folder_name
 
     resources_dir = Path(project_dir).joinpath("resources")
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    project_dict = project_resources.read_resource_entity(
-        project_resource_path, "project"
-    )
-    project_info = schemas.ProjectProps(**project_dict)
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    
+    # Load and validate the governance YAML using Pydantic model
+    try:
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+    except Exception as e:
+        raise typer.BadParameter(
+            f"Error loading governance file: {str(e)}"
+        )
+    
+    # Extract project info from governance model
+    if not governance.project:
+        raise typer.BadParameter(
+            f"No project information found in {governance_path}"
+        )
+    
+    project_info = governance.project
 
     if push_to_github and git_org and git_projects_repo:
         

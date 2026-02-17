@@ -5,13 +5,19 @@ import uuid
 from pathlib import Path
 from typing import Annotated
 import cr8tor.airlock.schema as schemas
-import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.crate_graph as proj_graph
 import cr8tor.cli.utils as cli_utils
 
 from datetime import datetime
 
 import cr8tor.airlock.api_client as api
+
+# Import LinkML Pydantic models
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+    Ingress,
+)
 
 app = typer.Typer()
 
@@ -58,8 +64,18 @@ def publish(
     publish_results = []
     start_time = datetime.now()
 
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    project_info = project_resources.read_resource(project_resource_path)
+    # Load LinkML-based governance and ingress YAML files
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    ingress_path = resources_dir.joinpath("data", "cr8-ingress.yaml")
+    
+    try:
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+        ingress = linkml_ops.load_yaml_as_pydantic(ingress_path, Ingress)
+    except Exception as e:
+        raise ValueError(f"Error loading project resources: {str(e)}")
+    
+    project_info = governance.project
+    project_id = project_info.id if project_info.id else project_info.reference
 
     if not bagit_dir.exists():
         cli_utils.exit_command(
@@ -72,38 +88,35 @@ def publish(
     if not current_rocrate_graph.is_project_action_complete(
         command_type=schemas.Cr8torCommandType.DISCLOSURE_CHECK,
         action_type=schemas.RoCrateActionType.ASSESS,
-        project_id=project_info["project"]["id"],
+        project_id=project_id,
     ):
         cli_utils.close_create_action_command(
             command_type=schemas.Cr8torCommandType.PUBLISH,
             start_time=start_time,
-            project_id=project_info["project"]["id"],
+            project_id=project_id,
             agent=agent,
-            project_resource_path=project_resource_path,
+            governance_path=governance_path,
             resources_dir=resources_dir,
             exit_msg="The data project must have disclosure completed before publishing",
             exit_code=schemas.Cr8torReturnCode.ACTION_WORKFLOW_ERROR,
             instrument=os.getenv("PUBLISH_NAME"),
         )
 
-    dataset_meta_file = None
-
     # TODO: Discuss with Piotr whether the publish function should be called per dataset or per project?
-    # Currently assumes 1 dataset file in metadata
+    # Currently publishes the entire project
 
     try:
-        for f in resources_dir.joinpath("metadata").glob("dataset*.toml"):
-            dataset_meta_file = f
-            break
-
         publish_req = schemas.DataContractPublishRequest(
-            project_name=project_info["project"]["project_name"],
-            project_start_time=project_info["project"]["project_start_time"],
-            destination=project_info["project"]["destination"],
+            project_name=project_info.name,
+            project_start_time=project_info.start_time if project_info.start_time else datetime.now().isoformat(),
+            destination={
+                "type": ingress.destination.type.value if hasattr(ingress.destination.type, 'value') else str(ingress.destination.type),
+                "url": ingress.destination.url if ingress.destination.url else "",
+            },
         )
 
         resp_dict = asyncio.run(api.publish(publish_req))
-        resp_dict["destination_type"] = project_info["project"]["destination"]["type"]
+        resp_dict["destination_type"] = ingress.destination.type.value if hasattr(ingress.destination.type, 'value') else str(ingress.destination.type)
         validate_resp = schemas.PublishPayload(**resp_dict)
         if validate_resp.data_published:
             publish_location_dict = validate_resp.data_published[0].model_dump()
@@ -111,17 +124,24 @@ def publish(
 
             publish_results.append(publish_location_dict)
 
-            project_resources.create_resource_entity(
-                dataset_meta_file, "publish_path", publish_location_dict
-            )
+            # Update the first dataset's locations with the publish path
+            # TODO: Handle multiple datasets and their respective publish paths
+            if ingress.datasets and len(ingress.datasets) > 0:
+                dataset = ingress.datasets[0]
+                if not dataset.locations:
+                    dataset.locations = []
+                dataset.locations.append(publish_location_dict)
+                
+                # Save updated ingress YAML with publish location
+                linkml_ops.save_pydantic_as_yaml(ingress_path, ingress)
 
     except Exception as e:
         cli_utils.close_create_action_command(
             command_type=schemas.Cr8torCommandType.PUBLISH,
             start_time=start_time,
-            project_id=project_info["project"]["id"],
+            project_id=project_id,
             agent=agent,
-            project_resource_path=project_resource_path,
+            governance_path=governance_path,
             resources_dir=resources_dir,
             exit_msg=f"{str(e)}",
             exit_code=schemas.Cr8torReturnCode.UNKNOWN_ERROR,
@@ -131,9 +151,9 @@ def publish(
     cli_utils.close_create_action_command(
         command_type=schemas.Cr8torCommandType.PUBLISH,
         start_time=start_time,
-        project_id=project_info["project"]["id"],
+        project_id=project_id,
         agent=agent,
-        project_resource_path=project_resource_path,
+        governance_path=governance_path,
         resources_dir=resources_dir,
         exit_msg=exit_msg,
         exit_code=exit_code,

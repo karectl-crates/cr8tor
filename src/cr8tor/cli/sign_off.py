@@ -1,13 +1,18 @@
 import os
 import typer
 import cr8tor.airlock.schema as s
-import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.crate_graph as proj_graph
 import cr8tor.cli.utils as cli_utils
 
 from pathlib import Path
 from typing import Annotated
 from datetime import datetime
+
+# Import LinkML Pydantic models
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+)
 
 app = typer.Typer()
 
@@ -67,11 +72,17 @@ def sign_off(
         agent = os.getenv("APP_NAME")
 
     start_time = datetime.now()
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    project_dict = project_resources.read_resource_entity(
-        project_resource_path, "project"
-    )
-    project_info = s.ProjectProps(**project_dict)
+    
+    # Load LinkML-based governance YAML file
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    
+    try:
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+    except Exception as e:
+        raise ValueError(f"Error loading governance resource: {str(e)}")
+    
+    project_info = governance.project
+    project_id = project_info.id if project_info.id else project_info.reference
 
     if not bagit_dir.exists():
         cli_utils.exit_command(
@@ -85,14 +96,14 @@ def sign_off(
     if not current_rocrate_graph.is_project_action_complete(
         command_type=s.Cr8torCommandType.VALIDATE,
         action_type=s.RoCrateActionType.ASSESS,
-        project_id=project_info.id,
+        project_id=project_id,
     ):
         cli_utils.close_assess_action_command(
             command_type=s.Cr8torCommandType.SIGN_OFF,
             start_time=start_time,
-            project_id=project_info.id,
+            project_id=project_id,
             agent=agent,
-            project_resource_path=project_resource_path,
+            project_resource_path=governance_path,
             resources_dir=resources_dir,
             exit_msg="The project must be validated before sign off / approval",
             exit_code=s.Cr8torReturnCode.ACTION_WORKFLOW_ERROR,
@@ -106,9 +117,9 @@ def sign_off(
     cli_utils.close_assess_action_command(
         command_type=s.Cr8torCommandType.SIGN_OFF,
         start_time=start_time,
-        project_id=project_info.id,
+        project_id=project_id,
         agent=agent,
-        project_resource_path=project_resource_path,
+        project_resource_path=governance_path,
         resources_dir=resources_dir,
         exit_msg="Sign off complete",
         exit_code=s.Cr8torReturnCode.SUCCESS,

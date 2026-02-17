@@ -1,0 +1,17 @@
+project:
+  name: linkmlETD
+  description: Example linkml cr8tor project for demonstration
+  reference: CR8TOR-005
+users:
+- id: https://example.org/users/mike
+  username: hardingm
+  given_name: Mike
+  family_name: Harding
+  affiliation: Lancaster University
+  email: m.harding@lancaster.ac.uk
+  groups:
+  - value: researchers
+    display: Research Group
+    type: Manual
+  start_date: '2024-01-01T00:00:00Z'
+  expiry_date: '2026-01-01T00:00:00Z'

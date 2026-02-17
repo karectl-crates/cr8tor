@@ -1,8 +1,10 @@
 import bagit
+import sys
 import typer
 import rocrate.model as m
 import cr8tor.airlock.schema as s
 import cr8tor.airlock.resourceops as project_resources
+import cr8tor.airlock.linkml_ops as linkml_ops
 from pathlib import Path
 from typing import Annotated
 from rocrate.rocrate import ROCrate
@@ -10,6 +12,14 @@ from rocrate.rocrate import ROCrate
 from cr8tor.exception import DirectoryNotFoundError
 from cr8tor.utils import log, make_uuid
 from cr8tor.cli.display import print_crate
+
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+    Project,
+    Ingress,
+    CreateAction,
+    AssessAction,
+)
 
 app = typer.Typer()
 
@@ -83,31 +93,36 @@ def build(
     if not resources_dir.exists():
         raise DirectoryNotFoundError(resources_dir)
 
-    project_resource_path = resources_dir.joinpath("governance", "project.toml")
-    governance = project_resources.read_resource(project_resource_path)
+    # Load LinkML-based governance YAML as Pydantic model
 
-    access_resource_path = resources_dir.joinpath("access", "access.toml")
-    access = project_resources.read_resource(access_resource_path)
+    governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
+    try:
+        governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+    except Exception as e:
+        raise ValueError(f"Error loading governance file: {str(e)}")
+
+    # Load LinkML-based ingress YAML as Pydantic model
+    ingress_path = resources_dir.joinpath("data", "cr8-ingress.yaml")
+    try:
+        ingress = linkml_ops.load_yaml_as_pydantic(ingress_path, Ingress)
+    except Exception as e:
+        raise ValueError(f"Error loading ingress file: {str(e)}")
 
     ###############################################################################
-    # 2 Check mandatory user-defined elements (i.e. gov, access) exists before
-    #  pydantic model validation on fields
+    # 2 Check mandatory user-defined elements (i.e. gov, access) exists
     ###############################################################################
 
-    governance_required_keys = {
-        "project": f"To build ro-crate 'project' properties must be defined in resource: {project_resource_path}",
-        "requesting_agent": f"To build ro-crate 'requesting_agent' properties must be defined in resource: {project_resource_path}",
-        "repository": f"To build ro-crate 'repository' properties must be defined in resource: {project_resource_path}",
-        "actions": f"To build ro-crate 'actions'list property must be defined in resource: {project_resource_path}",
-    }
+    # Validate governance model has required attributes
+    if not governance.project:
+        raise ValueError(f"To build ro-crate 'project' properties must be defined in resource: {governance_path}")
+    
+    # Check for actions (assuming it's a field in Project model)
+    if hasattr(governance.project, 'actions') and not governance.project.actions:
+        log.warning(f"No actions found in project. This may be expected for newly created projects.")
 
-    access_required_keys = {
-        "source": f"To build ro-crate source connection info is needed in resource: {access_resource_path}",
-        "credentials": f"To build ro-crate connection credentials info is needed in resource: {access_resource_path}",
-    }
-
-    check_required_keys(governance, governance_required_keys)
-    check_required_keys(access, access_required_keys)
+    # Validate ingress model has required attributes
+    if not ingress.destination:
+        raise ValueError(f"To build ro-crate 'destination' must be defined in resource: {ingress_path}")
 
     ###############################################################################
     # 3 Create initial Ro-Crate & build contextual entities
@@ -119,69 +134,77 @@ def build(
     # Load project info and init RC 'Project' entity
     #
 
-    project_props = s.ProjectProps(**governance["project"])
+    project = governance.project
     log.info(
-        f"[cyan]Creating RO-Crate for[/cyan] - [bold magenta]{project_props.name}[/bold magenta]",
+        f"[cyan]Creating RO-Crate for[/cyan] - [bold magenta]{project.name}[/bold magenta]",
     )
+
+    # Get project ID: prefer project.id if it has a value, otherwise fall back to reference
+    project_id = project.id if project.id else project.reference
 
     project_entity = m.ContextEntity(
         crate=crate,
-        identifier=project_props.id,
+        identifier=project_id,
         properties={
             "@type": "Project",
-            "name": project_props.name,
-            "identifier": project_props.reference,
+            "name": project.name,
+            "identifier": project.reference,
         },
     )
     crate.add(project_entity)
 
     #
     # Load requesting agent info and init RC 'Person' entity
+    # TODO: Requesting agent not yet in LinkML model - add when available
     #
-    requesting_agent_props = s.AgentProps(**governance["requesting_agent"])
-    person_entity = m.Person(
-        crate,
-        identifier=f"requesting-agent-{project_props.id}",
-        properties={
-            "name": requesting_agent_props.name,
-            "affiliation": {"@id": f"requesting-agent-org-{project_props.id}"},
-        },
-    )
+    # For now, skip requesting agent if not available in the governance model
+    if hasattr(governance, 'requesting_agent') and governance.requesting_agent:
+        requesting_agent = governance.requesting_agent
+        person_entity = m.Person(
+            crate,
+            identifier=f"requesting-agent-{project_id}",
+            properties={
+                "name": requesting_agent.name,
+                "affiliation": {"@id": f"requesting-agent-org-{project_id}"},
+            },
+        )
 
-    aff_entity = m.ContextEntity(
-        crate,
-        identifier=f"requesting-agent-org-{project_props.id}",
-        properties={
-            "@type": "Organisation",
-            "name": requesting_agent_props.affiliation.name,
-            "url": str(requesting_agent_props.affiliation.url),
-        },
-    )
+        aff_entity = m.ContextEntity(
+            crate,
+            identifier=f"requesting-agent-org-{project_id}",
+            properties={
+                "@type": "Organisation",
+                "name": requesting_agent.affiliation.name,
+                "url": str(requesting_agent.affiliation.url),
+            },
+        )
 
-    crate.add(aff_entity)
-    crate.add(person_entity)
+        crate.add(aff_entity)
+        crate.add(person_entity)
 
-    # Relation definition for ro-crate metadata file only (i.e. not stored are managed in the resources)
-    project_entity["memberOf"] = [{"@id": person_entity.id}]
+        # Relation definition for ro-crate metadata file only (i.e. not stored are managed in the resources)
+        project_entity["memberOf"] = [{"@id": person_entity.id}]
 
     #
     # Load project repository info and init RC 'SoftwareSourceCode' entity
+    # TODO: Repository not yet in LinkML model - add when available
     #
-    repo_props = s.SoftwareSourceCodeProps(**governance["repository"])
+    # For now, skip repository if not available in the governance model
+    if hasattr(governance, 'repository') and governance.repository:
+        repo = governance.repository
+        repo_entity = m.ContextEntity(
+            crate=crate,
+            identifier=f"repo-{project_id}",
+            properties={
+                "@type": "SoftwareSourceCode",
+                "name": repo.name,
+                "description": repo.description,
+                "codeRepository": f"{repo.codeRepository}cr8-{project_id}",
+            },
+        )
 
-    repo_entity = m.ContextEntity(
-        crate=crate,
-        identifier=f"repo-{project_props.id}",
-        properties={
-            "@type": "SoftwareSourceCode",
-            "name": repo_props.name,
-            "description": repo_props.description,
-            "codeRepository": f"{repo_props.codeRepository}cr8-{project_props.id}",
-        },
-    )
-
-    crate.add(repo_entity)
-    crate.metadata["isBasedOn"] = {"@id": f"repo-{project_props.id}"}
+        crate.add(repo_entity)
+        crate.metadata["isBasedOn"] = {"@id": f"repo-{project_id}"}
 
     #
     # Load access info and init RC entities
@@ -208,16 +231,16 @@ def build(
     #
 
     crate.add_file(
-        source=project_resource_path,
-        dest_path="governance/project.toml",
+        source=governance_path,
+        dest_path="governance/cr8-governance.yaml",
         properties={
-            "name": project_props.name,
-            "description": project_props.description,
+            "name": project.name,
+            "description": project.description,
         },
     )
 
     log.info(
-        msg="[cyan]Validated and added file[/cyan] - [bold magenta]governance/project.toml[/bold magenta]",
+        msg="[cyan]Validated and added file[/cyan] - [bold magenta]governance/cr8-governance.yaml[/bold magenta]",
     )
 
     #
@@ -281,40 +304,58 @@ def build(
         crate.add(data_ctx_entity)
 
     #
-    # Access resources
+    # Ingress/Data resources
+    # TODO: Process ingress model data and add to RO-Crate
     #
 
-    source_data = {}
-    source_data["source"] = access["source"].copy()
-    source_data["source"]["type"] = source_data["source"]["type"].lower()
-    source_data["source"]["credentials"] = access["credentials"]
-    source_data["extract_config"] = (
-        access["extract_config"] if "extract_config" in access else None
-    )
-    access_source = s.SourceConnectionModel(**source_data)
     crate.add_file(
-        source=access_resource_path,
-        dest_path="access/access.toml",
-        properties={"name": access_source.source.type},
+        source=ingress_path,
+        dest_path="data/cr8-ingress.yaml",
+        properties={
+            "name": "Data Ingress Configuration",
+            "description": "Data ingress configuration for the project",
+        },
     )
 
     log.info(
-        msg="[cyan]Validated and added access descriptor file[/cyan] - [bold magenta]access/access.toml[/bold magenta]",
+        msg="[cyan]Validated and added file[/cyan] - [bold magenta]data/cr8-ingress.yaml[/bold magenta]",
     )
+
+    # Legacy access resources - commented out as using new LinkML ingress model
+    # source_data = {}
+    # source_data["source"] = access["source"].copy()
+    # source_data["source"]["type"] = source_data["source"]["type"].lower()
+    # source_data["source"]["credentials"] = access["credentials"]
+    # source_data["extract_config"] = (
+    #     access["extract_config"] if "extract_config" in access else None
+    # )
+    # access_source = s.SourceConnectionModel(**source_data)
+    # crate.add_file(
+    #     source=access_resource_path,
+    #     dest_path="access/access.toml",
+    #     properties={"name": access_source.source.type},
+    # )
+    # log.info(
+    #     msg="[cyan]Validated and added access descriptor file[/cyan] - [bold magenta]access/access.toml[/bold magenta]",
+    # )
 
     ###############################################################################
     # 5 Finalise Crate
     ###############################################################################
-    crate.name = project_props.name
-    crate.description = project_props.description
+    crate.name = project.name
+    crate.description = project.description
     crate.license = s.CrateMeta.License
+    
+    # Get code repository URL from governance if available
+    repo_url = governance.repository.codeRepository if hasattr(governance, 'repository') and governance.repository else "https://github.com/lsc-sde-crates"
+    
     crate.publisher = m.ContextEntity(
         crate,
         identifier=s.CrateMeta.Publisher,
         properties={
             "@type": "Organisation",
             "name": "LSC SDE",
-            "url": repo_props.codeRepository,
+            "url": repo_url,
         },
     )
     crate.mainEntity = project_entity
@@ -324,28 +365,33 @@ def build(
     ###############################################################################
 
     #
-    # Check for actions
+    # Check for actions (assuming actions is a field in Project model)
     #
 
-    for action in governance["actions"]:
-        if action["type"] == "CreateAction":
-            action_props = s.CreateActionProps(**action)
-        elif action["type"] == "AssessAction":
-            action_props = s.AssessActionProps(**action)
+    if hasattr(governance.project, 'actions') and governance.project.actions:
+        for action in governance.project.actions:
+            # Actions are already validated Pydantic models from LinkML
+            # Check if it's a CreateAction or AssessAction instance
+            if isinstance(action, CreateAction):
+                action_type = "CreateAction"
+            elif isinstance(action, AssessAction):
+                action_type = "AssessAction"
+            else:
+                action_type = "Action"
 
-        crate.add_action(
-            instrument=action_props.instrument,
-            identifier=action_props.id,
-            result=[item.model_dump() for item in action_props.result],
-            properties={
-                "@type": action_props.type,
-                "name": action_props.name,
-                "startTime": action_props.start_time.isoformat(),
-                "endTime": action_props.end_time.isoformat(),
-                "actionStatus": action_props.action_status,
-                "agent": action_props.agent,
-            },
-        )
+            crate.add_action(
+                instrument=action.instrument,
+                identifier=action.id,
+                result=action.result if action.result else [],
+                properties={
+                    "@type": action_type,
+                    "name": action.name,
+                    "startTime": action.start_time.isoformat(),
+                    "endTime": action.end_time.isoformat(),
+                    "actionStatus": action.action_status,
+                    "agent": action.agent,
+                },
+            )
 
     ###############################################################################
     # 7 Add Ro-crate meta to bagit directory structure
@@ -362,7 +408,7 @@ def build(
             log.info("Loaded existing bag")
         else:
             bag = init_bag(
-                project_id=project_props.id, bagit_dir=bagit_dir, config=config
+                project_id=project_id, bagit_dir=bagit_dir, config=config
             )
 
         crate.write(bagit_dir / "data")
