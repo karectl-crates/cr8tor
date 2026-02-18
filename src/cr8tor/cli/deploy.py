@@ -22,8 +22,8 @@ from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
     Gitea,
     ProfileConfig,
     KubespawnerOverride,
+    EnvironmentVariable,
 )
-import json
 
 app = typer.Typer()
 
@@ -131,7 +131,10 @@ def create_deployment(
                         description="A TRE workspace for federated analysis with Python",
                         kubespawner_override=KubespawnerOverride(
                             image="ghcr.io/karectl/marimo-notebook-workspace:latest",
-                            env=json.dumps({"PROJECT_NAME": project_name, "WORKSPACE": f"/{project_name}/ws1"}),
+                            env=[
+                                EnvironmentVariable(name="PROJECT_NAME", value=project_name),
+                                EnvironmentVariable(name="WORKSPACE", value=f"/{project_name}/ws1"),
+                            ],
                         ),
                     ),
                     ProfileConfig(
@@ -140,7 +143,9 @@ def create_deployment(
                         description="R environment for statistical analysis",
                         kubespawner_override=KubespawnerOverride(
                             image="rocker/tidyverse:latest",
-                            env=json.dumps({"DISABLE_AUTH": "true"}),
+                            env=[
+                                EnvironmentVariable(name="DISABLE_AUTH", value="true"),
+                            ],
                         ),
                     ),
                 ],

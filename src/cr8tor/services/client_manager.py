@@ -81,10 +81,13 @@ def create_protocol_mappers(kc, client_uuid, mappers):
         try:
             mapper_config = mapper.get("config", {})
             config_str = {k: str(v) for k, v in mapper_config.items()} if isinstance(mapper_config, dict) else {}
+            protocol_mapper = mapper.get("protocol_mapper") or mapper.get("protocolMapper")
+            if not protocol_mapper:
+                raise KeyError(f"protocol_mapper is required for mapper '{mapper.get('name', 'unknown')}'")
             mapper_payload = {
                 "name": mapper["name"],
                 "protocol": mapper.get("protocol", "openid-connect"),
-                "protocolMapper": mapper.get("protocol_mapper", mapper.get("protocolMapper", "")),
+                "protocolMapper": protocol_mapper,
                 "consentRequired": mapper.get("consent_required", mapper.get("consentRequired", False)),
                 "config": config_str,
             }
