@@ -84,6 +84,9 @@ def test_pydantic_models():
     print("Testing Pydantic Models...")
 
     try:
+        # Trigger CRD registration so models get _crd_group metadata
+        import cr8tor.models.registry_config  # noqa: F401
+
         from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
             User, GroupSpec, KeycloakClientConfig, ProjectSpec, VDI,
         )

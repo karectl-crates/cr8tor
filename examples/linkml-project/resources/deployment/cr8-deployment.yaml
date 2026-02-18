@@ -3,13 +3,13 @@ environment:
 
 resources:
   - name: jupyterhub-main
-    type: Jupyter
+    resource_type: Jupyter
     url: https://jupyter.example.org
     enabled: true
     auth: oidc
 
   - name: keycloak-main
-    type: Keycloak
+    resource_type: Keycloak
     url: https://auth.example.org
     enabled: true
-    somethingspecific: realm-config
+    realm: dev-tre

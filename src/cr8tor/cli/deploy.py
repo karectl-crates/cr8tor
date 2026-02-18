@@ -120,7 +120,7 @@ def create_deployment(
         project_resources = [
             Jupyter(
                 name="jupyterhub",
-                type="Jupyter",
+                resource_type="Jupyter",
                 url=f"https://jupyter.{project_name}.example.com",
                 enabled=True,
                 auth="oidc",
@@ -147,20 +147,20 @@ def create_deployment(
             ),
             Keycloak(
                 name="keycloak",
-                type="Keycloak",
+                resource_type="Keycloak",
                 url=f"https://auth.{project_name}.example.com",
                 enabled=True,
                 realm=project_name,
             ),
             RStudio(
                 name="rstudio",
-                type="RStudio",
+                resource_type="RStudio",
                 url=f"https://rstudio.{project_name}.example.com",
                 enabled=True,
             ),
             Gitea(
                 name="gitea",
-                type="Gitea",
+                resource_type="Gitea",
                 url=f"https://gitea.{project_name}.example.com",
                 enabled=True,
             ),
