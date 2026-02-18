@@ -9,10 +9,21 @@ from cr8tor.utils import log
 
 import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.schema as schemas
-from cr8tor.models.identity import ProjectSpec, AppConfig, ProfileConfig, UserSpec, GroupSpec
 
-# Import LinkML Pydantic models
-from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import Governance
+# LinkML metamodels
+from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+    Governance,
+    GroupSpec,
+    User,
+    ProjectSpec,
+    Jupyter,
+    Keycloak,
+    RStudio,
+    Gitea,
+    ProfileConfig,
+    KubespawnerOverride,
+)
+import json
 
 app = typer.Typer()
 
@@ -103,73 +114,80 @@ def create_deployment(
 
     # Create ProjectSpec Pydantic model
     try:
-        # Build apps list with default examples
         project_name = project_props.reference or project_props.id or "unnamed-project"
-        apps = [
-            AppConfig(
-                name="jupyterhub",
-                type="jupyterhub",
-                url=f"https://jupyter.{project_name}.example.com",
-                config={"quota": "2CPU", "workspace": f"/{project_name}"},
-            ),
-            AppConfig(
-                name="guacamole",
-                type="vdi",
-                url=f"https://guacamole.{project_name}.example.com",
-                config={"desktop": "ubuntu-mate", "protocol": "rdp", "resolution": "1920x1080"},
-            ),
-            AppConfig(
-                name="rstudio",
-                type="rstudio",
-                url=f"https://rstudio.{project_name}.example.com",
-                config={"enabled": False},
-            ),
-            AppConfig(
-                name="gitea",
-                type="gitea",
-                url=f"https://gitea.{project_name}.example.com",
-                config={"enabled": True, "visibility": "private"},
-            ),
-        ]
 
-        # Build profiles list with default examples
-        profiles = [
-            ProfileConfig(
-                display_name=f"{project_name.replace('-', ' ').title()} Workspace 1",
-                slug=f"{project_name}-ws1",
-                description="A TRE workspace for federated analysis with Python",
-                kubespawner_override={
-                    "image": "ghcr.io/karectl/marimo-notebook-workspace:latest",
-                    "env": {"PROJECT_NAME": project_name, "WORKSPACE": f"/{project_name}/ws1"},
-                },
+        # Build resources list for each resource type carries its own config
+        project_resources = [
+            Jupyter(
+                name="jupyterhub",
+                type="Jupyter",
+                url=f"https://jupyter.{project_name}.example.com",
+                enabled=True,
+                auth="oidc",
+                profiles=[
+                    ProfileConfig(
+                        display_name=f"{project_name.replace('-', ' ').title()} Workspace 1",
+                        slug=f"{project_name}-ws1",
+                        description="A TRE workspace for federated analysis with Python",
+                        kubespawner_override=KubespawnerOverride(
+                            image="ghcr.io/karectl/marimo-notebook-workspace:latest",
+                            env=json.dumps({"PROJECT_NAME": project_name, "WORKSPACE": f"/{project_name}/ws1"}),
+                        ),
+                    ),
+                    ProfileConfig(
+                        display_name="R Statistical Computing",
+                        slug="r-stats",
+                        description="R environment for statistical analysis",
+                        kubespawner_override=KubespawnerOverride(
+                            image="rocker/tidyverse:latest",
+                            env=json.dumps({"DISABLE_AUTH": "true"}),
+                        ),
+                    ),
+                ],
             ),
-            ProfileConfig(
-                display_name="R Statistical Computing",
-                slug="r-stats",
-                description="R environment for statistical analysis",
-                kubespawner_override={
-                    "image": "rocker/tidyverse:latest",
-                    "env": {"DISABLE_AUTH": "true"},
-                },
+            Keycloak(
+                name="keycloak",
+                type="Keycloak",
+                url=f"https://auth.{project_name}.example.com",
+                enabled=True,
+                realm=project_name,
+            ),
+            RStudio(
+                name="rstudio",
+                type="RStudio",
+                url=f"https://rstudio.{project_name}.example.com",
+                enabled=True,
+            ),
+            Gitea(
+                name="gitea",
+                type="Gitea",
+                url=f"https://gitea.{project_name}.example.com",
+                enabled=True,
             ),
         ]
 
         project_spec = ProjectSpec(
             description=project_props.name or "CR8TOR Project",
-            apps=apps,
-            profiles=profiles,
+            resources=project_resources,
         )
 
         log.info(
-            f"✓ Created ProjectSpec with {len(project_spec.apps)} apps and {len(project_spec.profiles)} profiles"
+            f"Created ProjectSpec with {len(project_spec.resources)} resources"
         )
 
     except Exception as e:
-        log.info(f"✗ Failed to create ProjectSpec: {e}", err=True)
+        log.info(f"Failed to create ProjectSpec: {e}", err=True)
         raise typer.Exit(1)
 
     # Create full Project CRD
+    # Serialize resources individually to preserve subclass-specific fields
     project_name = project_props.reference or project_props.id or "unnamed-project"
+    spec_dict = {
+        "description": project_spec.description,
+        "resources": [
+            r.model_dump(exclude_none=True) for r in project_spec.resources
+        ],
+    }
     project_crd = {
         "apiVersion": "research.karectl.io/v1alpha1",
         "kind": "Project",
@@ -180,7 +198,7 @@ def create_deployment(
                 "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
             },
         },
-        "spec": project_spec.model_dump(exclude_none=True),
+        "spec": spec_dict,
     }
 
     # Validate against CRD schema
@@ -247,14 +265,14 @@ def create_deployment(
 
     # Create UserSpec from requesting_agent
     try:
-        user_spec = UserSpec(
+        user_spec = User(
+            id=requesting_agent.id,
             username=requesting_agent.username,
             email=requesting_agent.email,
             enabled=True,
-            groups=[project_name, f"{project_name}-analyst"],  # Add user to project and analyst groups
-            keycloak={"firstName": requesting_agent.given_name, "lastName": requesting_agent.family_name},
-            jupyterhub={"admin": False},
-            karectl={"organization": requesting_agent.affiliation if requesting_agent.affiliation else "Unknown"},
+            given_name=requesting_agent.given_name,
+            family_name=requesting_agent.family_name,
+            affiliation=requesting_agent.affiliation,
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
@@ -322,38 +340,32 @@ def create_deployment(
     # Create Group CRDs for project access control
     ###############################################################################
 
+    admin_name = f"{project_name}-admin"
+    analyst_name = f"{project_name}-analyst"
+
     group_definitions = [
-        {
-            "name": project_name,
-            "spec": GroupSpec(
-                description=f"{project_name} project group",
-                projects=[project_name],
-                members=[requesting_agent.username],
-                subgroups=[f"{project_name}-admin", f"{project_name}-analyst"],
-            ),
-        },
-        {
-            "name": f"{project_name}-admin",
-            "spec": GroupSpec(
-                description=f"{project_name} admin group",
-                projects=[project_name],
-            ),
-        },
-        {
-            "name": f"{project_name}-analyst",
-            "spec": GroupSpec(
-                description=f"{project_name} analyst group",
-                projects=[project_name],
-                members=[requesting_agent.username],
-            ),
-        },
+        (project_name, GroupSpec(
+            description=f"Main group for {project_name}",
+            members=[requesting_agent.username],
+            projects=[project_name],
+            subgroups=[admin_name, analyst_name],
+        )),
+        (admin_name, GroupSpec(
+            description=f"Admin subgroup for {project_name}",
+            members=[],
+            projects=[project_name],
+            subgroups=[],
+        )),
+        (analyst_name, GroupSpec(
+            description=f"Analyst subgroup for {project_name}",
+            members=[requesting_agent.username],
+            projects=[project_name],
+            subgroups=[],
+        )),
     ]
 
     group_output_files = []
-    for group_def in group_definitions:
-        group_name = group_def["name"]
-        group_spec = group_def["spec"]
-
+    for group_name, group_spec in group_definitions:
         group_crd = {
             "apiVersion": "identity.karectl.io/v1alpha1",
             "kind": "Group",
@@ -377,13 +389,17 @@ def create_deployment(
             try:
                 with open(group_crd_schema_file) as f:
                     group_crd_definition = yaml.safe_load(f)
+
                 group_openapi_schema = group_crd_definition["spec"]["versions"][0]["schema"][
                     "openAPIV3Schema"
                 ]
+
                 jsonschema.validate(instance=group_crd, schema=group_openapi_schema)
                 log.info(f"Group CRD validation passed for {group_name}")
+
             except jsonschema.ValidationError as e:
                 log.info(f"Group CRD validation failed for {group_name}: {e.message}", err=True)
+                log.info(f"  Path: {' -> '.join(str(p) for p in e.path)}", err=True)
                 raise typer.Exit(1)
             except Exception as e:
                 log.info(f"Group validation error for {group_name}: {e}", err=True)
@@ -394,8 +410,10 @@ def create_deployment(
         try:
             with open(group_output_file, "w") as f:
                 yaml.dump(group_crd, f, default_flow_style=False, sort_keys=False)
+
             log.info(f"Group CRD written to {group_output_file}")
             group_output_files.append(group_output_file)
+
         except Exception as e:
             log.info(f"Failed to write Group CRD file: {e}", err=True)
             raise typer.Exit(1)

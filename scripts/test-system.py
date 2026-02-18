@@ -84,10 +84,11 @@ def test_pydantic_models():
     print("Testing Pydantic Models...")
 
     try:
-        from cr8tor.models.identity import UserSpec, GroupSpec, KeycloakClientSpec
-        from cr8tor.models.workspaces import VDIInstanceSpec
+        from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+            User, GroupSpec, KeycloakClientConfig, ProjectSpec, VDI,
+        )
 
-        models = [UserSpec, GroupSpec, KeycloakClientSpec, VDIInstanceSpec]
+        models = [User, GroupSpec, KeycloakClientConfig, ProjectSpec, VDI]
 
         for model in models:
             schema = model.model_json_schema()

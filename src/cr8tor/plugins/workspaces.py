@@ -26,9 +26,9 @@ class WorkspacesPlugin(PluginBase):
 
     @property
     def models(self):
-        from cr8tor.models.workspaces import VDIInstanceSpec
+        from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import VDI
 
-        return [VDIInstanceSpec]
+        return [VDI]
 
     def _initialise_plugin(self):
         """Initialise workspaces-specific resources."""

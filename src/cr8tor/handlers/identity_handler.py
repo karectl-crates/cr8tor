@@ -347,7 +347,7 @@ def group_delete(body, spec, meta, **kwargs):
 def client_create_update(body, spec, meta, **kwargs):
     """Handle KeycloakClient create, update, and resume (on operator restart).
     """
-    client_id = spec["clientId"]
+    client_id = spec.get("client_id") or spec.get("clientId")
     namespace = meta.get("namespace", "keycloak")
     sync_keycloak_client(client_id, spec, namespace=namespace)
     kopf.info(
@@ -357,7 +357,7 @@ def client_create_update(body, spec, meta, **kwargs):
 
 @kopf.on.delete("identity.karectl.io", "v1alpha1", "keycloakclient")
 def client_delete(body, spec, meta, **kwargs):
-    client_id = spec["clientId"]
+    client_id = spec.get("client_id") or spec.get("clientId")
     delete_keycloak_client(client_id)
     kopf.info(
         meta, reason="ClientDeleted", message=f"Keycloak client {client_id} deleted."
@@ -373,8 +373,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     """
     project_name = meta["name"]
     description = spec.get("description", "")
-    apps = spec.get("apps", [])
-    profiles = spec.get("profiles", [])
+    resources = spec.get("resources", [])
 
     # Create/update project namespace
     try:
@@ -462,7 +461,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
         message=(
             f"Project {project_name} synced to namespace "
             f"{get_proj_namespace(project_name)} "
-            f"({len(apps)} apps, {len(profiles)} profiles)"
+            f"({len(resources)} resources)"
         ),
     )
 

@@ -1,0 +1,78 @@
+name: Sync Metamodel Dependency
+
+on:
+  # Triggered by cr8tor-metamodel workflow
+  repository_dispatch:
+    types: [metamodel-updated]
+  # Manual trigger
+  workflow_dispatch:
+  # Scheduled check (fallback if dispatch token not configured)
+  schedule:
+    - cron: '0 6 * * 1-5' # Weekdays at 06:00 UTC
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6.4.3
+        with:
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Update metamodel dependency
+        run: uv lock --upgrade-package cr8tor-metamodel
+
+      - name: Check for lock changes
+        id: changes
+        run: |
+          if [[ -n $(git diff --name-only uv.lock) ]]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "uv.lock has changed, so metamodel was updated"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "uv.lock unchanged and it's already up to date"
+          fi
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: auto/sync-metamodel
+          delete-branch: true
+          title: "chore: sync cr8tor-metamodel dependency"
+          body: |
+            Automated update of `cr8tor-metamodel` dependency.
+
+            This PR was triggered by a schema change in [cr8tor-metamodel](https://github.com/karectl-crates/cr8tor-metamodel).
+
+            **What changed:**
+            - Updated `uv.lock` to pin the latest `cr8tor-metamodel` commit
+
+            **Trigger:** ${{ github.event_name }}
+          labels: dependencies,automated
+          commit-message: "chore: sync cr8tor-metamodel dependency"
+
+      - name: Summary
+        run: |
+          echo "## Metamodel Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.changes.outputs.changed }}" == "true" ]]; then
+            echo "**Result:** Lock file updated and PR created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Result:** Already up to date" >> $GITHUB_STEP_SUMMARY
+          fi
