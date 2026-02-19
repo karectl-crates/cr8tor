@@ -87,27 +87,35 @@ def get_helm_storage_config():
     }
 
 
-def get_project_storage_config(project_name):
-    """ Get storage config from Project CRD.
-
-    Args:
-        project_name: Name of the project
+def _get_project_spec(project_name):
+    """ Get the full Project CRD spec.
     """
     api = kubernetes.client.CustomObjectsApi()
-
+    identity_namespace = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
     try:
-        project = api.get_cluster_custom_object(
+        project = api.get_namespaced_custom_object(
             group="research.karectl.io",
             version="v1alpha1",
             plural="projects",
+            namespace=identity_namespace,
             name=project_name,
         )
-        return project.get("spec", {}).get("storage", {}) or {}
+        return project.get("spec", {})
     except ApiException as e:
         if e.status == 404:
             logger.warning(f"Project {project_name} not found")
             return {}
         raise
+
+
+def _get_resource_entry(spec, resource_type):
+    """ Get resource entry by resource_type.
+    """
+    for entry in spec.get("resources", []):
+        if entry.get("resource_type") == resource_type:
+            return entry
+    return {}
+
 
 
 def resolve_notebook_storage_config(project_name, override_size=None, override_storage_class=None):
@@ -119,7 +127,8 @@ def resolve_notebook_storage_config(project_name, override_size=None, override_s
         override_storage_class: Optional storage class override
     """
     helm_config = get_helm_storage_config()
-    project_config = get_project_storage_config(project_name)
+    spec = _get_project_spec(project_name)
+    project_config = _get_resource_entry(spec, "Jupyter").get("storage") or spec.get("storage") or {}
 
     # Resolve storage class (Override > Project > Helm)
     storage_class = (
@@ -162,7 +171,8 @@ def resolve_vdi_storage_config(vdi_spec, project_name):
         project_name: Name of the project
     """
     helm_config = get_helm_storage_config()
-    project_config = get_project_storage_config(project_name)
+    spec = _get_project_spec(project_name)
+    project_config = _get_resource_entry(spec, "VDI").get("storage") or spec.get("storage") or {}
     vdi_storage = vdi_spec.get("storage", {}) or {}
 
     # Resolve storage class (VDI > Project > Helm)
@@ -313,25 +323,13 @@ def resolve_scheduling_config(vdi_spec, project_name):
         vdi_spec: VDI instance spec dict
         project_name: Name of the project
     """
-    project_config = get_project_storage_config(project_name)
-    project_scheduling = project_config.get("scheduling", {}) if project_config else {}
-
-    # Get from parent project spec, except storage
-    api = kubernetes.client.CustomObjectsApi()
-    try:
-        project = api.get_cluster_custom_object(
-            group="research.karectl.io",
-            version="v1alpha1",
-            plural="projects",
-            name=project_name,
-        )
-        project_scheduling = project.get("spec", {}).get("scheduling", {}) or {}
-    except ApiException as e:
-        if e.status == 404:
-            logger.warning(f"Project {project_name} not found for scheduling config")
-            project_scheduling = {}
-        else:
-            raise
+    spec = _get_project_spec(project_name)
+    vdi_entry = _get_resource_entry(spec, "VDI")
+    project_scheduling = (
+        vdi_entry.get("scheduling")
+        or spec.get("scheduling")
+        or {}
+    )
 
     vdi_scheduling = vdi_spec.get("scheduling", {}) or {}
     # Resolve simple fields (VDI > Project)
