@@ -177,11 +177,10 @@ def create_deployment(
 
         project_spec = ProjectSpec(
             description=project_props.name or "CR8TOR Project",
-            resources=project_resources,
         )
 
         log.info(
-            f"Created ProjectSpec with {len(project_spec.resources)} resources"
+            f"Created ProjectSpec with {len(project_resources)} resources"
         )
 
     except Exception as e:
@@ -191,12 +190,35 @@ def create_deployment(
     # Create full Project CRD
     # Serialize resources individually to preserve subclass-specific fields
     project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
+
+    # Read scheduling and storage extras from deployment config if available
+    deployment_path = resources_dir.joinpath("deployment", "cr8-deployment.yaml")
+    deployment_resource_extras = {}
+    if deployment_path.exists():
+        with open(deployment_path) as f:
+            deployment_config = yaml.safe_load(f) or {}
+        for entry in deployment_config.get("resources", []):
+            name = entry.get("name")
+            if not name:
+                continue
+            extras = {}
+            if "scheduling" in entry:
+                extras["scheduling"] = entry["scheduling"]
+            if "storage" in entry:
+                extras["storage"] = entry["storage"]
+            if extras:
+                deployment_resource_extras[name] = extras
+
+    serialised_resources = []
+    for resource in project_resources:
+        resource_dict = resource.model_dump(exclude_none=True) if hasattr(resource, "model_dump") else dict(resource)
+        extras = deployment_resource_extras.get(resource_dict.get("name", ""), {})
+        resource_dict.update(extras)
+        serialised_resources.append(resource_dict)
+
     spec_dict = {
         "description": project_spec.description or project_props.name or "CR8TOR Project",
-        "resources": [
-            resource.model_dump(exclude_none=True) if hasattr(resource, "model_dump") else resource
-            for resource in project_resources
-        ],
+        "resources": serialised_resources,
     }
     project_crd = {
         "apiVersion": "research.karectl.io/v1alpha1",

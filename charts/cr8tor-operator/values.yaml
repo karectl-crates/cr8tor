@@ -69,6 +69,15 @@ securityContext:
 vdiTemplates:
   enabled: true
 
+# VDI configuration
+vdi:
+  # Default resource limits for vdi pods
+  defaultResources:
+    requestsCpu: "500m"
+    requestsMemory: "1Gi"
+    limitsCpu: "2"
+    limitsMemory: "4Gi"
+
 # Storage configuration for workspaces (VDI/notebooks)
 # These act as cluster-level defaults and caps
 storage:
