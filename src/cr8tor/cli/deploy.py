@@ -1,4 +1,5 @@
 import os
+import re
 import typer
 import yaml
 import jsonschema
@@ -6,6 +7,15 @@ from pathlib import Path
 from typing import Annotated, Optional
 from datetime import datetime
 from cr8tor.utils import log
+
+
+def _sanitise_label(value: str) -> str:
+    """ Sanitise a string to be a valid k8s label value.
+    """
+    value = re.sub(r'https?://', '', value)
+    value = re.sub(r'[^A-Za-z0-9._-]', '-', value)
+    value = value.strip('-_.')
+    return value[:63] or "unknown"
 
 import cr8tor.airlock.linkml_ops as linkml_ops
 import cr8tor.airlock.schema as schemas
@@ -199,7 +209,7 @@ def create_deployment(
         "metadata": {
             "name": project_name,
             "labels": {
-                "cr8tor.io/project-id": project_props.id or "unknown",
+                "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                 "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
             },
         },
@@ -293,7 +303,7 @@ def create_deployment(
         "metadata": {
             "name": requesting_agent.username,
             "labels": {
-                "cr8tor.io/project-id": project_props.id or "unknown",
+                "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                 "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
             },
         },
@@ -377,7 +387,7 @@ def create_deployment(
             "metadata": {
                 "name": group_name,
                 "labels": {
-                    "cr8tor.io/project-id": project_props.id or "unknown",
+                    "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                     "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
                 },
             },
@@ -430,7 +440,7 @@ def create_deployment(
         log.info(f"  - Group CRD: {gf}")
 
     ###############################################################################
-    # Generate ArgoCD Application YAML (app-per-project pattern)
+    # Generate ArgoCD ApplicationSet YAML (app-per-project)
     ###############################################################################
 
     if argocd_dir is not None:
@@ -443,12 +453,12 @@ def create_deployment(
 
         argocd_app = {
             "apiVersion": "argoproj.io/v1alpha1",
-            "kind": "Application",
+            "kind": "ApplicationSet",
             "metadata": {
                 "name": f"cr8tor-{project_name}",
                 "namespace": "argocd",
                 "labels": {
-                    "cr8tor.io/project-id": project_props.id or "unknown",
+                    "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                     "cr8tor.io/managed-by": "cr8tor",
                     "app.kubernetes.io/part-of": "cr8tor-projects",
                 },
@@ -458,36 +468,61 @@ def create_deployment(
                 },
             },
             "spec": {
-                "project": "default",
-                "source": {
-                    "repoURL": repo_url,
-                    "targetRevision": "main",
-                    "path": source_path,
-                },
-                "destination": {
-                    "server": "https://kubernetes.default.svc",
-                    "namespace": "keycloak",
-                },
-                "syncPolicy": {
-                    "automated": {
-                        "prune": True,
-                        "selfHeal": True,
-                    },
-                    "syncOptions": [
-                        "CreateNamespace=false",
-                        "ApplyOutOfSyncOnly=true",
-                    ],
-                },
-                "ignoreDifferences": [
+                "goTemplate": True,
+                "goTemplateOptions": ["missingkey=error"],
+                "generators": [
                     {
-                        "group": "argoproj.io",
-                        "kind": "Application",
-                        "jsonPointers": [
-                            "/spec/syncPolicy",
-                            "/spec/source/targetRevision",
-                        ],
+                        "clusters": {
+                            "selector": {
+                                "matchExpressions": [
+                                    {
+                                        "key": "environment",
+                                        "operator": "In",
+                                        "values": ["dev", "stg", "prd"],
+                                    },
+                                    {
+                                        "key": f"skip-cr8tor-{project_name}",
+                                        "operator": "NotIn",
+                                        "values": ["true"],
+                                    },
+                                ],
+                            },
+                        },
                     },
                 ],
+                "template": {
+                    "metadata": {
+                        "name": f"cr8tor-{project_name}-{{{{.nameNormalized}}}}",
+                        "namespace": "argocd",
+                        "labels": {
+                            "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
+                            "cr8tor.io/managed-by": "cr8tor",
+                            "app.kubernetes.io/part-of": "cr8tor-projects",
+                        },
+                    },
+                    "spec": {
+                        "project": "default",
+                        "source": {
+                            "repoURL": repo_url,
+                            "targetRevision": "main",
+                            "path": source_path,
+                        },
+                        "destination": {
+                            "server": "{{.server}}",
+                            "namespace": "keycloak",
+                        },
+                        "syncPolicy": {
+                            "automated": {
+                                "prune": True,
+                                "selfHeal": True,
+                            },
+                            "syncOptions": [
+                                "CreateNamespace=false",
+                                "ApplyOutOfSyncOnly=true",
+                            ],
+                        },
+                    },
+                },
             },
         }
 
@@ -497,10 +532,10 @@ def create_deployment(
         try:
             with open(argocd_output_file, "w") as f:
                 yaml.dump(argocd_app, f, default_flow_style=False, sort_keys=False)
-            log.info(f"ArgoCD application written to {argocd_output_file}")
+            log.info(f"ArgoCD ApplicationSet written to {argocd_output_file}")
 
         except Exception as e:
-            log.info(f"Failed to write ArgoCD application file: {e}", err=True)
+            log.info(f"Failed to write ArgoCD ApplicationSet file: {e}", err=True)
             raise typer.Exit(1)
 
         # Register in kustomization.yaml
