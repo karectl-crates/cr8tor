@@ -27,7 +27,6 @@ from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
     User,
     ProjectSpec,
     Jupyter,
-    Keycloak,
     RStudio,
     Gitea,
     ProfileConfig,
@@ -160,24 +159,19 @@ def create_deployment(
                     ),
                 ],
             ),
-            Keycloak(
-                name="keycloak",
-                resource_type="Keycloak",
-                url=f"https://auth.{project_name}.example.com",
-                enabled=True,
-                realm=project_name,
-            ),
+            # VDI (guacamole) is a capability so no need to control per user level
+            {"name": "guacamole", "resource_type": "VDI", "enabled": True},
             RStudio(
                 name="rstudio",
                 resource_type="RStudio",
                 url=f"https://rstudio.{project_name}.example.com",
-                enabled=True,
+                enabled=False,
             ),
             Gitea(
                 name="gitea",
                 resource_type="Gitea",
                 url=f"https://gitea.{project_name}.example.com",
-                enabled=True,
+                enabled=False,
             ),
         ]
 
@@ -198,9 +192,10 @@ def create_deployment(
     # Serialize resources individually to preserve subclass-specific fields
     project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
     spec_dict = {
-        "description": project_spec.description,
+        "description": project_spec.description or project_props.name or "CR8TOR Project",
         "resources": [
-            r.model_dump(exclude_none=True) for r in project_spec.resources
+            resource.model_dump(exclude_none=True) if hasattr(resource, "model_dump") else resource
+            for resource in project_resources
         ],
     }
     project_crd = {
