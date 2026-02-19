@@ -278,7 +278,43 @@ def create_deployment(
     requesting_agent = governance.users[0]
     log.info(f"\n✓ Loaded requesting agent: {requesting_agent.username}")
 
-    # Create UserSpec from requesting_agent
+    ###############################################################################
+    # Define Group CRDs
+    ###############################################################################
+
+    admin_name = f"{project_name}-admin"
+    analyst_name = f"{project_name}-analyst"
+
+    group_definitions = [
+        (project_name, GroupSpec(
+            description=f"Main group for {project_name}",
+            members=[requesting_agent.username],
+            projects=[project_name],
+            subgroups=[admin_name, analyst_name],
+        )),
+        (admin_name, GroupSpec(
+            description=f"Admin subgroup for {project_name}",
+            members=[],
+            projects=[project_name],
+            subgroups=[],
+        )),
+        (analyst_name, GroupSpec(
+            description=f"Analyst subgroup for {project_name}",
+            members=[requesting_agent.username],
+            projects=[project_name],
+            subgroups=[],
+        )),
+    ]
+
+    # Derive User CRD groups based on the groups and users attached to.
+    user_project_groups = [
+        {"value": group_name, "display": group_spec.description, "type": "Manual"}
+        for group_name, group_spec in group_definitions
+        if requesting_agent.username in (group_spec.members or [])
+    ]
+    log.info(f" User will be added to groups: {[g['value'] for g in user_project_groups]}")
+
+    # Create UserSpec from requesting_agent.
     try:
         user_spec = User(
             id=requesting_agent.id,
@@ -288,7 +324,7 @@ def create_deployment(
             given_name=requesting_agent.given_name,
             family_name=requesting_agent.family_name,
             affiliation=requesting_agent.affiliation,
-            groups=requesting_agent.groups if requesting_agent.groups else None,
+            groups=user_project_groups,
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
@@ -355,30 +391,6 @@ def create_deployment(
     ###############################################################################
     # Create Group CRDs for project access control
     ###############################################################################
-
-    admin_name = f"{project_name}-admin"
-    analyst_name = f"{project_name}-analyst"
-
-    group_definitions = [
-        (project_name, GroupSpec(
-            description=f"Main group for {project_name}",
-            members=[requesting_agent.username],
-            projects=[project_name],
-            subgroups=[admin_name, analyst_name],
-        )),
-        (admin_name, GroupSpec(
-            description=f"Admin subgroup for {project_name}",
-            members=[],
-            projects=[project_name],
-            subgroups=[],
-        )),
-        (analyst_name, GroupSpec(
-            description=f"Analyst subgroup for {project_name}",
-            members=[requesting_agent.username],
-            projects=[project_name],
-            subgroups=[],
-        )),
-    ]
 
     group_output_files = []
     for group_name, group_spec in group_definitions:

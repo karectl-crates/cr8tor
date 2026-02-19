@@ -39,12 +39,21 @@ def get_user_projects(user_groups):
     """Resolve all projects from a list of group memberships.
 
     Args:
-        user_groups: List of group names (from User CRD spec.groups)
+        user_groups: List of group names or dicts (from User CRD spec.groups).
     """
     api = kubernetes.client.CustomObjectsApi()
     projects = set()
 
-    for group_name in user_groups:
+    for group in user_groups:
+        # Groups can be plain strings or dicts
+        if isinstance(group, dict):
+            group_name = group.get("value")
+        else:
+            group_name = group
+
+        if not group_name:
+            continue
+
         try:
             group_cr = api.get_namespaced_custom_object(
                 group="identity.karectl.io",
