@@ -79,13 +79,16 @@ def create_protocol_mappers(kc, client_uuid, mappers):
 
     for mapper in mappers:
         try:
-            config = mapper.get("config", {})
-            config_str = {k: str(v) for k, v in config.items()}
+            mapper_config = mapper.get("config", {})
+            config_str = {k: str(v) for k, v in mapper_config.items()} if isinstance(mapper_config, dict) else {}
+            protocol_mapper = mapper.get("protocol_mapper") or mapper.get("protocolMapper")
+            if not protocol_mapper:
+                raise KeyError(f"protocol_mapper is required for mapper '{mapper.get('name', 'unknown')}'")
             mapper_payload = {
                 "name": mapper["name"],
                 "protocol": mapper.get("protocol", "openid-connect"),
-                "protocolMapper": mapper["protocolMapper"],
-                "consentRequired": mapper.get("consentRequired", False),
+                "protocolMapper": protocol_mapper,
+                "consentRequired": mapper.get("consent_required", mapper.get("consentRequired", False)),
                 "config": config_str,
             }
 
@@ -121,23 +124,29 @@ def create_protocol_mappers(kc, client_uuid, mappers):
 
 
 def sync_keycloak_client(client_id, spec, namespace=None):
+    """ Sync a Keycloak client."""
     kc = get_client()
     clients = kc.get_clients()
     client_obj = next((c for c in clients if c["clientId"] == client_id), None)
 
+    # Support both snake_case (LinkML) and camelCase (legacy) field names
+    def get_field(snake, camel, default=None):
+        return spec.get(snake, spec.get(camel, default))
+
     secret_value = None
-    if "secretRef" in spec:
+    secret_ref = get_field("secret_ref", "secretRef")
+    if secret_ref:
         try:
             config.load_incluster_config()
             v1 = client.CoreV1Api()
             secret_namespace = namespace or os.environ.get("KUBERNETES_NAMESPACE", "keycloak")
 
             secret = v1.read_namespaced_secret(
-                name=spec["secretRef"]["name"], namespace=secret_namespace
+                name=secret_ref["name"], namespace=secret_namespace
             )
-            secret_key = spec["secretRef"].get("key", "client-secret")
+            secret_key = secret_ref.get("key", "client-secret")
             secret_value = base64.b64decode(secret.data[secret_key]).decode("utf-8")
-            print(f"Retrieved secret for {client_id} from {spec['secretRef']['name']} in namespace {secret_namespace}")
+            print(f"Retrieved secret for {client_id} from {secret_ref['name']} in namespace {secret_namespace}")
 
         except Exception as e:
             print(f"Error reading secretRef for {client_id}: {e}")
@@ -151,20 +160,17 @@ def sync_keycloak_client(client_id, spec, namespace=None):
         return
 
     payload = {
-        "clientId": spec["clientId"],
+        "clientId": get_field("client_id", "clientId"),
         "name": spec.get("name"),
         "enabled": spec.get("enabled", True),
         "secret": secret_value,
-        "redirectUris": spec.get("redirectUris", []),
-        "webOrigins": spec.get("webOrigins", []),
+        "redirectUris": get_field("redirect_uris", "redirectUris", []),
+        "webOrigins": get_field("web_origins", "webOrigins", []),
         "protocol": "openid-connect",
         "publicClient": False,
         "standardFlowEnabled": True,
         "directAccessGrantsEnabled": True,
     }
-
-    if "additionalConfig" in spec:
-        payload.update(spec["additionalConfig"])
 
     try:
         if client_obj:
@@ -176,19 +182,18 @@ def sync_keycloak_client(client_id, spec, namespace=None):
             print(f"Created Keycloak client {client_id}")
 
         # Handle client scope assignments
-        if "defaultClientScopes" in spec:
-            assign_client_scopes(
-                kc, client_uuid, spec["defaultClientScopes"], scope_type="default"
-            )
+        default_scopes = get_field("default_client_scopes", "defaultClientScopes")
+        if default_scopes:
+            assign_client_scopes(kc, client_uuid, default_scopes, scope_type="default")
 
-        if "optionalClientScopes" in spec:
-            assign_client_scopes(
-                kc, client_uuid, spec["optionalClientScopes"], scope_type="optional"
-            )
+        optional_scopes = get_field("optional_client_scopes", "optionalClientScopes")
+        if optional_scopes:
+            assign_client_scopes(kc, client_uuid, optional_scopes, scope_type="optional")
 
         # Handle protocol mappers
-        if "protocolMappers" in spec:
-            create_protocol_mappers(kc, client_uuid, spec["protocolMappers"])
+        mappers = get_field("protocol_mappers", "protocolMappers")
+        if mappers:
+            create_protocol_mappers(kc, client_uuid, mappers)
 
     except Exception as e:
         print(f"Error syncing client {client_id}: {e}")
@@ -196,6 +201,7 @@ def sync_keycloak_client(client_id, spec, namespace=None):
 
 
 def delete_keycloak_client(client_id):
+    """Delete a client from keycloak."""
     kc = get_client()
     clients = kc.get_clients()
     client_obj = next((c for c in clients if c["clientId"] == client_id), None)

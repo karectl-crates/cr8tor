@@ -2,6 +2,11 @@
 FROM python:3.12-slim AS builder
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
+# git is required for uv to resolve git dependencies (cr8tor-metamodel)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
 # Change the working directory to the `app` directory
 WORKDIR /app
 

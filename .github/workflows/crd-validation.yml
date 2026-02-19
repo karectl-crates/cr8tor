@@ -6,6 +6,8 @@ on:
     - 'src/cr8tor/models/**'
     - 'src/cr8tor/crd/**'
     - 'src/cr8tor/plugins/**'
+    - 'pyproject.toml'
+    - 'uv.lock'
   push:
     branches:
     - main
@@ -13,6 +15,8 @@ on:
     - 'src/cr8tor/models/**'
     - 'src/cr8tor/crd/**'
     - 'src/cr8tor/plugins/**'
+    - 'pyproject.toml'
+    - 'uv.lock'
 
 jobs:
   validate-crds:
@@ -21,22 +25,26 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.2.2
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v6.4.3
+      with:
+        python-version: '3.12'
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v5.6.0
       with:
         python-version: '3.12'
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .
+      run: uv sync --locked
 
     - name: Generate CRDs
       run: |
-        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
-        python -c "
+        uv run python -c "
         from cr8tor.crd.generator import KareCRDManager
         manager = KareCRDManager()
         success = manager.generate_all_crds(force=True)
@@ -47,8 +55,7 @@ jobs:
 
     - name: Validate generated CRDs
       run: |
-        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
-        python -c "
+        uv run python -c "
         from cr8tor.crd.generator import KareCRDManager
         manager = KareCRDManager()
         if not manager.validate_generated_crds():
@@ -78,8 +85,7 @@ jobs:
 
     - name: Test in-memory CRD generation
       run: |
-        export PYTHONPATH="${PWD}/src:${PYTHONPATH}"
-        python -c "
+        uv run python -c "
         from cr8tor.crd.generator import KareCRDManager
         manager = KareCRDManager()
         crds = manager.get_crds_as_dict()

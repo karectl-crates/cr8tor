@@ -1,6 +1,9 @@
 # Ignore generated bagit
 /examples/simple_project/bagit/
 
+# Ignore generated CRDs
+crds/
+
 # Ignore vscode settings
 .vscode/
 .qodo/

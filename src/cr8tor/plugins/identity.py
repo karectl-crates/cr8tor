@@ -24,14 +24,14 @@ class IdentityPlugin(PluginBase):
 
     @property
     def models(self):
-        from cr8tor.models.identity import (
-            UserSpec,
+        from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
+            User,
             GroupSpec,
-            KeycloakClientSpec,
+            KeycloakClientConfig,
             ProjectSpec,
         )
 
-        return [UserSpec, GroupSpec, KeycloakClientSpec, ProjectSpec]
+        return [User, GroupSpec, KeycloakClientConfig, ProjectSpec]
 
     def _initialise_plugin(self):
         """Initialise identity-specific resources."""
