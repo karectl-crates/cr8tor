@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "bagit>=1.8.1",
     "cookiecutter>=2.6.0",
+    "cr8tor-metamodel",
     "pydantic>=2.10.4",
     "rocrate>=0.13.0",
     "tomlkit>=0.13.2",
@@ -50,5 +51,11 @@ dev = [
     "pymdown-extensions>=10.14",
     "ruff>=0.8.6",
 ]
+[tool.uv.sources]
+# Git source for CI/Docker. For local dev, override with:
+#   uv pip install -e ../cr8tor-metamodel
+# TODO: Remove this section entirely when cr8tor-metamodel is published to PyPI.
+cr8tor-metamodel = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git" }
+
 [tool.uv.workspace]
-members = ["cr8tor", "metamodel"]
+members = ["cr8tor"]

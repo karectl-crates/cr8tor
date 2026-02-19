@@ -1,3 +1,0 @@
-[submodule "metamodel"]
-	path = metamodel
-	url = https://github.com/karectl-crates/cr8tor-metamodel.git

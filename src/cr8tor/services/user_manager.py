@@ -10,23 +10,29 @@ def sync_keycloak_user(username, spec):
     enabled = spec.get("enabled", True)
     groups = spec.get("groups", [])
     password = spec.get("password")
+    first_name = spec.get("given_name", "")
+    last_name = spec.get("family_name", "")
     user_created = False
     temp_password = None
+
+    user_payload = {
+        "username": username,
+        "email": email,
+        "enabled": enabled,
+        "firstName": first_name,
+        "lastName": last_name,
+    }
 
     # Try to get the user first
     try:
         user_id = keycloak_client.get_user_id(username)
         try:
             # Try updating the user
-            keycloak_client.update_user(
-                user_id, {"email": email, "enabled": enabled, "username": username}
-            )
+            keycloak_client.update_user(user_id, user_payload)
         except KeycloakPutError as err:
             if "User not found" in str(err):
                 print(f"[INFO] User {username} not found on update, creating instead.")
-                user_id = keycloak_client.create_user(
-                    {"username": username, "email": email, "enabled": enabled}
-                )
+                user_id = keycloak_client.create_user(user_payload)
                 user_created = True
             else:
                 raise
@@ -34,9 +40,7 @@ def sync_keycloak_user(username, spec):
     except KeycloakGetError:
         # If user does not exist, create them
         print(f"[INFO] User {username} not found, creating.")
-        user_id = keycloak_client.create_user(
-            {"username": username, "email": email, "enabled": enabled}
-        )
+        user_id = keycloak_client.create_user(user_payload)
         user_created = True
 
     # Always get the actual user_id (in case it was just created)

@@ -54,12 +54,21 @@ class OpenAPIConverter:
 
         # Handle anyOf (Optional fields)
         if "anyOf" in prop_schema:
-            for option in prop_schema.get("anyOf", []):
-                if option.get("type") != "null":
-                    result = OpenAPIConverter._convert_property(option, defs)
-                    if "description" in prop_schema and "description" not in result:
-                        result["description"] = prop_schema["description"]
-                    return result
+            non_null = [o for o in prop_schema["anyOf"] if o.get("type") != "null"]
+            if len(non_null) > 1:
+                # Discriminated union (e.g. Resource subclasses) — accept any shape
+                result = {
+                    "type": "object",
+                    "x-kubernetes-preserve-unknown-fields": True,
+                }
+                if "description" in prop_schema:
+                    result["description"] = prop_schema["description"]
+                return result
+            for option in non_null:
+                result = OpenAPIConverter._convert_property(option, defs)
+                if "description" in prop_schema and "description" not in result:
+                    result["description"] = prop_schema["description"]
+                return result
             # If all options are null, treat as string
             return {"type": "string"}
 
