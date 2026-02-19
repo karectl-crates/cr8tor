@@ -44,7 +44,7 @@ def close_create_action_command(
 
     action_props = CreateAction(
         id=f"{command_type}-{project_id}",
-        type="CreateAction",
+        action_type="CreateAction",
         name=f"{command_type} Data Project Action",
         start_time=start_time,
         end_time=datetime.now(),
@@ -118,7 +118,7 @@ def close_assess_action_command(
 
     action_props = AssessAction(
         id=f"{command_type}-{project_id}",
-        type="AssessAction",
+        action_type="AssessAction",
         name=f"{command_type} Data Project Action",
         start_time=start_time,
         end_time=datetime.now(),
