@@ -290,6 +290,7 @@ def create_deployment(
             given_name=requesting_agent.given_name,
             family_name=requesting_agent.family_name,
             affiliation=requesting_agent.affiliation,
+            groups=requesting_agent.groups if requesting_agent.groups else None,
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
