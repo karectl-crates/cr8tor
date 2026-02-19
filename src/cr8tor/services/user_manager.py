@@ -49,7 +49,11 @@ def sync_keycloak_user(username, spec):
     for group in keycloak_client.get_user_groups(user_id):
         keycloak_client.group_user_remove(user_id, group["id"])
 
-    for groupname in groups:
+    for group_entry in groups:
+        # Groups can be plain strings or dicts with a 'value' key
+        groupname = group_entry.get("value") if isinstance(group_entry, dict) else group_entry
+        if not groupname:
+            continue
         group = [
             grp for grp in keycloak_client.get_groups() if grp["name"] == groupname
         ]
