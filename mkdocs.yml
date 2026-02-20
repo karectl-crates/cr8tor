@@ -17,7 +17,9 @@ nav:
     - Approve DAR: user-guide/approve-dar.md
     - Environments: user-guide/environments.md
     - Troubleshooting: user-guide/troubleshooting.md
-  - Developer Guide:
+  - Deployment Guide:
+    - Overview: operator-guide/overview.md
+  - Development Guide:
     - Orchestration layer setup: developer-guide/orchestration-layer-setup.md
     - Source setup: developer-guide/source-setup.md
   - Cr8tor CLI App:
