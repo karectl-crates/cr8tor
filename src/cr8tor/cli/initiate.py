@@ -196,9 +196,10 @@ def initiate(
                 f"Invalid project directory. Missing: {project_resources_path}"
             )
         
-        log.info(f"Using existing project directory: {project_dir_path}")
+        log.info(f"Use existing project directory: {project_dir_path}")
         project_dir = str(project_dir_path)
-    
+        log.info(f"Set project directory: {project_dir}")
+
     else:
         # Template path is required when not skipping template
         if not template_path:
