@@ -253,23 +253,27 @@ def initiate(
                 folder_name = re.search(r'"(.*?)"', str(e)).group(1)
                 project_dir = Path.cwd() / folder_name
 
+    log.info(f"1")
     resources_dir = Path(project_dir).joinpath("resources")
     governance_path = resources_dir.joinpath("governance", "cr8-governance.yaml")
-    
+    log.info(f"2")
     # Load and validate the governance YAML using Pydantic model
     try:
         governance = linkml_ops.load_yaml_as_pydantic(governance_path, Governance)
+        log.info(f"3")
     except Exception as e:
+        log.info(f"4")
         raise typer.BadParameter(
             f"Error loading governance file: {str(e)}"
         )
     
+    log.info(f"5")
     # Extract project info from governance model
     if not governance.project:
         raise typer.BadParameter(
             f"No project information found in {governance_path}"
         )
-    
+    log.info(f"6")
     project_info = governance.project
 
     if push_to_github and git_org and git_projects_repo:
