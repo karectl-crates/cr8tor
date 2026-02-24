@@ -36,6 +36,9 @@ cr8tor = "cr8tor.cli:app"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [dependency-groups]
 dev = [
     "griffe>=1.5.5",
