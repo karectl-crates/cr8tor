@@ -114,7 +114,7 @@ def create_deployment(
     # Create ProjectSpec Pydantic model
     try:
         # Build apps list with default examples
-        project_name = project_props.reference or project_props.id or "unnamed-project"
+        project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
         apps = [
             AppConfig(
                 name="jupyterhub",
@@ -179,7 +179,7 @@ def create_deployment(
         raise typer.Exit(1)
 
     # Create full Project CRD
-    project_name = project_props.reference or project_props.id or "unnamed-project"
+    project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
     project_crd = {
         "apiVersion": "research.k8tre.io/v1alpha1",
         "kind": "Project",
@@ -455,7 +455,7 @@ def create_deployment(
                     "app.kubernetes.io/part-of": "cr8tor-projects",
                 },
                 "annotations": {
-                    "cr8tor.io/dar-reference": project_name,
+                    "cr8tor.io/dar-reference": project_props.reference or project_props.id or "unnamed-project",
                     "cr8tor.io/created-at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 },
             },
@@ -500,7 +500,7 @@ def create_deployment(
                             "path": source_path,
                         },
                         "destination": {
-                            "server": "https://kubernetes.default.svc",
+                            "server": "{{.server}}",
                             "namespace": "keycloak",
                         },
                         "syncPolicy": {
@@ -524,10 +524,10 @@ def create_deployment(
         try:
             with open(argocd_output_file, "w") as f:
                 yaml.dump(argocd_app, f, default_flow_style=False, sort_keys=False)
-            log.info(f"ArgoCD application written to {argocd_output_file}")
+            log.info(f"ArgoCD ApplicationSet written to {argocd_output_file}")
 
         except Exception as e:
-            log.info(f"Failed to write ArgoCD application file: {e}", err=True)
+            log.info(f"Failed to write ArgoCD ApplicationSet file: {e}", err=True)
             raise typer.Exit(1)
 
         # Register in kustomization.yaml
