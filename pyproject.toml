@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "bagit>=1.8.1",
     "cookiecutter>=2.6.0",
-    "cr8tor-metamodel",
+    "cr8tor-metamodel @ git+https://github.com/karectl-crates/cr8tor-metamodel.git",
     "pydantic>=2.10.4",
     "rocrate>=0.13.0",
     "tomlkit>=0.13.2",
