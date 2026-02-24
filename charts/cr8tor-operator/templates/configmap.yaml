@@ -69,27 +69,13 @@ data:
             timeoutSeconds: 1
             successThreshold: 1
             failureThreshold: 3
-          {{ "{% if scheduling and scheduling.resources %}" }}
           resources:
-            {{ "{% if scheduling.resources.requests_cpu or scheduling.resources.requests_memory %}" }}
             requests:
-              {{ "{% if scheduling.resources.requests_cpu %}" }}
-              cpu: "{{ "{{" }} scheduling.resources.requests_cpu {{ "}}" }}"
-              {{ "{% endif %}" }}
-              {{ "{% if scheduling.resources.requests_memory %}" }}
-              memory: "{{ "{{" }} scheduling.resources.requests_memory {{ "}}" }}"
-              {{ "{% endif %}" }}
-            {{ "{% endif %}" }}
-            {{ "{% if scheduling.resources.limits_cpu or scheduling.resources.limits_memory %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.requests_cpu if (scheduling and scheduling.resources and scheduling.resources.requests_cpu) else '{{ .Values.vdi.defaultResources.requestsCpu }}' {{ "}}" }}"
+              memory: "{{ "{{" }} scheduling.resources.requests_memory if (scheduling and scheduling.resources and scheduling.resources.requests_memory) else '{{ .Values.vdi.defaultResources.requestsMemory }}' {{ "}}" }}"
             limits:
-              {{ "{% if scheduling.resources.limits_cpu %}" }}
-              cpu: "{{ "{{" }} scheduling.resources.limits_cpu {{ "}}" }}"
-              {{ "{% endif %}" }}
-              {{ "{% if scheduling.resources.limits_memory %}" }}
-              memory: "{{ "{{" }} scheduling.resources.limits_memory {{ "}}" }}"
-              {{ "{% endif %}" }}
-            {{ "{% endif %}" }}
-          {{ "{% endif %}" }}
+              cpu: "{{ "{{" }} scheduling.resources.limits_cpu if (scheduling and scheduling.resources and scheduling.resources.limits_cpu) else '{{ .Values.vdi.defaultResources.limitsCpu }}' {{ "}}" }}"
+              memory: "{{ "{{" }} scheduling.resources.limits_memory if (scheduling and scheduling.resources and scheduling.resources.limits_memory) else '{{ .Values.vdi.defaultResources.limitsMemory }}' {{ "}}" }}"
           volumeMounts:
             - name: home
               mountPath: /home/ubuntu
