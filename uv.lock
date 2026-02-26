@@ -532,8 +532,8 @@ dev = [
 
 [[package]]
 name = "cr8tor-metamodel"
-version = "0.0.0.post18.dev0+2c642f7"
-source = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git#2c642f7cf33036ba6fc2ff02ee6bc1232cad4c6c" }
+version = "0.0.0.post20.dev0+a5792ba"
+source = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git#a5792ba80d7c11a86b8e5684ae2946316f8addd9" }
 dependencies = [
     { name = "linkml-runtime" },
 ]
