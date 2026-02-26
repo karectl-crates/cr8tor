@@ -42,14 +42,14 @@ data:
               value: "{{ "{{" }} user {{ "}}" }}"
             - name: VDI_PROJECT
               value: "{{ "{{" }} project {{ "}}" }}"
-            - name: KARECTL_USER
+            - name: K8TRE_USER
               value: "{{ "{{" }} user {{ "}}" }}"
-            - name: KARECTL_PROJECT
+            - name: K8TRE_PROJECT
               value: "{{ "{{" }} project {{ "}}" }}"
             - name: VDI_LINUX_USER
               value: "{{ "{{" }} linux_user {{ "}}" }}"
-            - name: KARECTL_ENVIRONMENT
-              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'KARECTL_ENVIRONMENT') | map(attribute='value') | first | default('stg', true) {{ "}}" }}"
+            - name: K8TRE_ENVIRONMENT
+              value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'K8TRE_ENVIRONMENT') | map(attribute='value') | first | default('dev', true) {{ "}}" }}"
             - name: K8TRE_DOMAIN
               value: "{{ "{{" }} env_vars | selectattr('name', 'equalto', 'K8TRE_DOMAIN') | map(attribute='value') | first | default('k8tre.io', true) {{ "}}" }}"
             {{ "{% if env_vars %}" }}
@@ -248,28 +248,28 @@ data:
     # Script to create desktop shortcuts
     set -e
     echo "Starting VDI Desktop Setup"
-    echo "User: ${KARECTL_USER}"
-    echo "Project: ${KARECTL_PROJECT}"
+    echo "User: ${K8TRE_USER}"
+    echo "Project: ${K8TRE_PROJECT}"
     LINUX_USER="${VDI_LINUX_USER:-ubuntu}"
     echo "Using Linux user: ${LINUX_USER}"
 
-    if [ -n "${KARECTL_ENVIRONMENT}" ] && [ -n "${K8TRE_DOMAIN}" ]; then
-        ENVIRONMENT="${KARECTL_ENVIRONMENT}"
+    if [ -n "${K8TRE_ENVIRONMENT}" ] && [ -n "${K8TRE_DOMAIN}" ]; then
+        ENVIRONMENT="${K8TRE_ENVIRONMENT}"
         DOMAIN="${K8TRE_DOMAIN}"
         echo "Using explicit environment and domain"
-    elif [ -n "${KARECTL_BACKEND_URL}" ]; then
-        if [[ "${KARECTL_BACKEND_URL}" == *".svc.cluster.local"* ]]; then
-            ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
+    elif [ -n "${K8TRE_BACKEND_URL}" ]; then
+        if [[ "${K8TRE_BACKEND_URL}" == *".svc.cluster.local"* ]]; then
+            ENVIRONMENT="${K8TRE_ENVIRONMENT:-dev}"
             DOMAIN="${K8TRE_DOMAIN:-cluster.local}"
             echo "Using internal cluster URL with defaults"
         else
-            BACKEND_HOST=$(echo "${KARECTL_BACKEND_URL}" | sed 's|https\?://portal\.||' | sed 's|/.*||')
+            BACKEND_HOST=$(echo "${K8TRE_BACKEND_URL}" | sed 's|https\?://portal\.||' | sed 's|/.*||')
             ENVIRONMENT=$(echo "${BACKEND_HOST}" | cut -d. -f1)
             DOMAIN="${BACKEND_HOST}"
             echo "Extracted environment and domain from portal URL"
         fi
     else
-        ENVIRONMENT="${KARECTL_ENVIRONMENT:-dev}"
+        ENVIRONMENT="${K8TRE_ENVIRONMENT:-dev}"
         DOMAIN="${K8TRE_DOMAIN:-localhost}"
         echo "Using default environment and domain"
     fi
@@ -290,7 +290,7 @@ data:
     Version=1.0
     Type=Application
     Name=${name}
-    Comment=Launch ${name} for ${KARECTL_PROJECT} project
+    Comment=Launch ${name} for ${K8TRE_PROJECT} project
     Exec=firefox --new-window "${url}"
     Icon=${icon}
     Terminal=false
@@ -314,11 +314,11 @@ data:
     EOF
     chmod +x "${DESKTOP_DIR}/firefox.desktop"
 
-    if [ -n "${KARECTL_TOKEN}" ]; then
-        SSO_URL="https://portal.${DOMAIN}/auth/sso?token=${KARECTL_TOKEN}&project=${KARECTL_PROJECT}&app=jupyter"
+    if [ -n "${K8TRE_TOKEN}" ]; then
+        SSO_URL="https://portal.${DOMAIN}/auth/sso?token=${K8TRE_TOKEN}&project=${K8TRE_PROJECT}&app=jupyter"
 
         create_desktop_shortcut \
-            "JupyterHub - ${KARECTL_PROJECT^}" \
+            "JupyterHub - ${K8TRE_PROJECT^}" \
             "${SSO_URL}" \
             "applications-science" \
             "jupyterhub.desktop"
