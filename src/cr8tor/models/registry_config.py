@@ -22,3 +22,6 @@ CRDRegistry.register("identity.karectl.io", "v1alpha1", "KeycloakClient", "keycl
 CRDRegistry.register("identity.karectl.io", "v1alpha1", "Group", "groups")(GroupSpec)
 CRDRegistry.register("research.karectl.io", "v1alpha1", "Project", "projects")(ProjectSpec)
 CRDRegistry.register("karectl.io", "v1alpha1", "VDIInstance", "vdiinstances")(VDI)
+
+# Publishing CRDs for publish.karectl.io
+import cr8tor.models.publish

@@ -1,6 +1,6 @@
 """Base classes for CRD specifications."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, List
 from datetime import datetime
 
@@ -27,17 +27,13 @@ class CRDCondition(BaseModel):
 class CRDStatus(BaseModel):
     """Base class for all CRD status objects."""
 
+    model_config = ConfigDict(extra="allow")
     phase: Optional[str] = None
     conditions: List[CRDCondition] = Field(default_factory=list)
     observedGeneration: Optional[int] = None
-
-    class Config:
-        extra = "allow"
 
 
 class CRDSpec(BaseModel):
     """Base class for all CRD spec objects."""
 
-    class Config:
-        extra = "forbid"
-        validate_assignment = True
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
