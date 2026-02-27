@@ -123,7 +123,7 @@ def create_deployment(
 
     # Create ProjectSpec Pydantic model
     try:
-        project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
+        project_name = (project_props.reference or project_props.name or project_props.id or "unnamed-project").lower()
 
         # Build resources list for each resource type carries its own config
         project_resources = [
@@ -189,7 +189,7 @@ def create_deployment(
 
     # Create full Project CRD
     # Serialize resources individually to preserve subclass-specific fields
-    project_name = (project_props.reference or project_props.id or "unnamed-project").lower()
+    project_name = (project_props.reference or project_props.name or project_props.id or "unnamed-project").lower()
 
     # Read scheduling and storage extras from deployment config if available
     deployment_path = resources_dir.joinpath("deployment", "cr8-deployment.yaml")
@@ -493,7 +493,7 @@ def create_deployment(
                     "app.kubernetes.io/part-of": "cr8tor-projects",
                 },
                 "annotations": {
-                    "cr8tor.io/dar-reference": project_props.reference or project_props.id or "unnamed-project",
+                    "cr8tor.io/dar-reference": project_props.reference or project_props.name or project_props.id or "unnamed-project",
                     "cr8tor.io/created-at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
                 },
             },
