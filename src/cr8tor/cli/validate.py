@@ -68,7 +68,6 @@ def merge_metadata_into_dataset(
                     new_col = Column(
                         name=meta_col.name,
                         datatype=meta_col.datatype or "string",
-                        description=meta_col.description
                     )
                     existing_table.columns.append(new_col)
                 else:
@@ -87,13 +86,11 @@ def merge_metadata_into_dataset(
                         Column(
                             name=col.name,
                             datatype=col.datatype or "string",
-                            description=col.description
                         )
                     )
-            
+
             new_table = Table(
                 name=meta_table.name,
-                description=meta_table.description,
                 columns=new_columns if new_columns else None
             )
             target_dataset.tables.append(new_table)
