@@ -339,6 +339,7 @@ def create_deployment(
             raise typer.Exit(1)
 
     # Create a User CRD for every user defined in governance
+    user_output_files = []
     for requesting_agent in governance.users:
         log.info(f"\nLoaded requesting agent: {requesting_agent.username}")
 
@@ -401,6 +402,7 @@ def create_deployment(
             with open(user_output_file, "w") as f:
                 yaml.dump(user_crd, f, default_flow_style=False, sort_keys=False)
             log.info(f"User CRD written to {user_output_file}")
+            user_output_files.append(user_output_file)
         except Exception as e:
             log.info(f"Failed to write User CRD file: {e}", err=True)
             raise typer.Exit(1)
@@ -465,7 +467,8 @@ def create_deployment(
 
     log.info(f"\n✓ All deployment CRDs created successfully")
     log.info(f"  - Project CRD: {output_file}")
-    log.info(f"  - User CRD: {user_output_file}")
+    for uf in user_output_files:
+        log.info(f"  - User CRD: {uf}")
     for gf in group_output_files:
         log.info(f"  - Group CRD: {gf}")
 
