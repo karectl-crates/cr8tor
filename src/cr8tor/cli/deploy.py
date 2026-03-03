@@ -294,84 +294,121 @@ def create_deployment(
         log.info(f"  Skipping User CRD generation")
         return
 
-    # Use the first user as the requesting agent
-    requesting_agent = governance.users[0]
-    log.info(f"\n✓ Loaded requesting agent: {requesting_agent.username}")
+    ###############################################################################
+    # Define Group CRDs
+    ###############################################################################
 
-    # Create UserSpec from requesting_agent
-    try:
-        user_spec = User(
-            id=requesting_agent.id,
-            username=requesting_agent.username,
-            email=requesting_agent.email,
-            enabled=True,
-            given_name=requesting_agent.given_name,
-            family_name=requesting_agent.family_name,
-            affiliation=requesting_agent.affiliation,
-            groups=user_project_groups,
-            password=requesting_agent.password,
-        )
+    admin_name = f"{project_name}-admin"
+    analyst_name = f"{project_name}-analyst"
+    all_usernames = [u.username for u in governance.users]
 
-        log.info(f"✓ Created UserSpec for {user_spec.username}")
+    group_definitions = [
+        (project_name, GroupSpec(
+            description=f"Main group for {project_name}",
+            members=all_usernames,
+            projects=[project_name],
+            subgroups=[admin_name, analyst_name],
+        )),
+        (admin_name, GroupSpec(
+            description=f"Admin subgroup for {project_name}",
+            members=[],
+            projects=[project_name],
+            subgroups=[],
+        )),
+        (analyst_name, GroupSpec(
+            description=f"Analyst subgroup for {project_name}",
+            members=all_usernames,
+            projects=[project_name],
+            subgroups=[],
+        )),
+    ]
 
-    except Exception as e:
-        log.info(f"✗ Failed to create UserSpec: {e}", err=True)
-        raise typer.Exit(1)
-
-    # Create full User CRD
-    user_crd = {
-        "apiVersion": "identity.k8tre.io/v1alpha1",
-        "kind": "User",
-        "metadata": {
-            "name": requesting_agent.username,
-            "labels": {
-                "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
-                "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
-            },
-        },
-        "spec": user_spec.model_dump(exclude_none=True),
-    }
-
-    # Validate against User CRD schema
+    # Load CRD schema for reuse across all users
     user_crd_schema_file = crd_schema_dir.joinpath("users.identity.k8tre.io.yaml")
+    user_openapi_schema = None
     if not user_crd_schema_file.exists():
         log.info(
-            f"⚠ User CRD schema file not found: {user_crd_schema_file}, skipping validation"
+            f"User CRD schema file not found: {user_crd_schema_file}, skipping validation"
         )
     else:
         try:
-            # Load CRD schema
             with open(user_crd_schema_file) as f:
                 user_crd_definition = yaml.safe_load(f)
-
-            # Extract OpenAPI schema
             user_openapi_schema = user_crd_definition["spec"]["versions"][0]["schema"][
                 "openAPIV3Schema"
             ]
-
-            # Validate the CRD instance
-            jsonschema.validate(instance=user_crd, schema=user_openapi_schema)
-            log.info(f"✓ User CRD validation passed")
-
-        except jsonschema.ValidationError as e:
-            log.info(f"✗ User CRD validation failed: {e.message}", err=True)
-            log.info(f"  Path: {' -> '.join(str(p) for p in e.path)}", err=True)
-            raise typer.Exit(1)
         except Exception as e:
-            log.info(f"✗ User validation error: {e}", err=True)
+            log.info(f"Failed to load User CRD schema: {e}", err=True)
             raise typer.Exit(1)
 
-    # Write User CRD to file
-    user_output_file = output_dir.joinpath(f"user-{requesting_agent.username}.yaml")
-    try:
-        with open(user_output_file, "w") as f:
-            yaml.dump(user_crd, f, default_flow_style=False, sort_keys=False)
+    # Create a User CRD for every user defined in governance
+    user_output_files = []
+    for requesting_agent in governance.users:
+        log.info(f"\nLoaded requesting agent: {requesting_agent.username}")
 
-        log.info(f"✓ User CRD written to {user_output_file}")
+        # Derive the group for this user
+        user_project_groups = [
+            {"value": group_name, "display": group_spec.description, "type": "Manual"}
+            for group_name, group_spec in group_definitions
+            if requesting_agent.username in (group_spec.members or [])
+        ]
+        log.info(f"User will be added to groups: {[g['value'] for g in user_project_groups]}")
 
-    except Exception as e:
-        log.info(f"✗ Failed to write User CRD file: {e}", err=True)
-        raise typer.Exit(1)
+        # Create UserSpec
+        try:
+            user_spec = User(
+                id=requesting_agent.id,
+                username=requesting_agent.username,
+                email=requesting_agent.email,
+                enabled=True,
+                given_name=requesting_agent.given_name,
+                family_name=requesting_agent.family_name,
+                affiliation=requesting_agent.affiliation,
+                groups=user_project_groups,
+                password=requesting_agent.password,
+            )
+            log.info(f"Created UserSpec for {user_spec.username}")
+        except Exception as e:
+            log.info(f"Failed to create UserSpec: {e}", err=True)
+            raise typer.Exit(1)
+
+        # Create full User CRD
+        user_crd = {
+            "apiVersion": "identity.k8tre.io/v1alpha1",
+            "kind": "User",
+            "metadata": {
+                "name": requesting_agent.username,
+                "labels": {
+                    "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
+                    "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
+                },
+            },
+            "spec": user_spec.model_dump(exclude_none=True),
+        }
+
+        # Validate against User CRD schema
+        if user_openapi_schema:
+            try:
+                jsonschema.validate(instance=user_crd, schema=user_openapi_schema)
+                log.info(f"User CRD validation passed")
+            except jsonschema.ValidationError as e:
+                log.info(f"User CRD validation failed: {e.message}", err=True)
+                log.info(f"  Path: {' -> '.join(str(p) for p in e.path)}", err=True)
+                raise typer.Exit(1)
+            except Exception as e:
+                log.info(f"User validation error: {e}", err=True)
+                raise typer.Exit(1)
+
+        # Write each User CRD to file
+        user_output_file = output_dir.joinpath(f"user-{requesting_agent.username}.yaml")
+        try:
+            with open(user_output_file, "w") as f:
+                yaml.dump(user_crd, f, default_flow_style=False, sort_keys=False)
+            log.info(f"User CRD written to {user_output_file}")
+            user_output_files.append(user_output_file)
+        except Exception as e:
+            log.info(f"Failed to write User CRD file: {e}", err=True)
+            raise typer.Exit(1)
 
     ###############################################################################
     # Create Group CRDs for project access control
@@ -457,7 +494,8 @@ def create_deployment(
 
     log.info(f"\n✓ All deployment CRDs created successfully")
     log.info(f"  - Project CRD: {output_file}")
-    log.info(f"  - User CRD: {user_output_file}")
+    for uf in user_output_files:
+        log.info(f"  - User CRD: {uf}")
     for gf in group_output_files:
         log.info(f"  - Group CRD: {gf}")
 
