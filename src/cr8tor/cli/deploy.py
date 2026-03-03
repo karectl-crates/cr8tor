@@ -342,6 +342,7 @@ def create_deployment(
             family_name=requesting_agent.family_name,
             affiliation=requesting_agent.affiliation,
             groups=user_project_groups,
+            password=requesting_agent.password,
         )
 
         log.info(f"✓ Created UserSpec for {user_spec.username}")
