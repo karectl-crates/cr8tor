@@ -40,7 +40,19 @@ def generate_demo_crds():
                                             },
                                             "groups": {
                                                 "type": "array",
-                                                "items": {"type": "string"},
+                                                "items": {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "value": {"type": "string"},
+                                                        "ref": {"type": "string"},
+                                                        "display": {"type": "string"},
+                                                        "type": {
+                                                            "type": "string",
+                                                            "enum": ["Manual", "Automatic"],
+                                                        },
+                                                    },
+                                                    "additionalProperties": True,
+                                                },
                                             },
                                             "keycloak": {
                                                 "type": "object",
