@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import base64
@@ -80,6 +81,11 @@ def create_protocol_mappers(kc, client_uuid, mappers):
     for mapper in mappers:
         try:
             mapper_config = mapper.get("config", {})
+            if isinstance(mapper_config, str):
+                try:
+                    mapper_config = json.loads(mapper_config)
+                except (json.JSONDecodeError, TypeError):
+                    mapper_config = {}
             config_str = {k: str(v) for k, v in mapper_config.items()} if isinstance(mapper_config, dict) else {}
             protocol_mapper = mapper.get("protocol_mapper") or mapper.get("protocolMapper")
             if not protocol_mapper:

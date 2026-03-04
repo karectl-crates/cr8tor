@@ -68,6 +68,13 @@ class OpenAPIConverter:
                 result = OpenAPIConverter._convert_property(option, defs)
                 if "description" in prop_schema and "description" not in result:
                     result["description"] = prop_schema["description"]
+                # A string field mentioned as json data should be stored as a yaml object in the CRD
+                if result.get("type") == "string" and "JSON" in result.get("description", ""):
+                    return {
+                        "type": "object",
+                        "x-kubernetes-preserve-unknown-fields": True,
+                        "description": result.get("description", ""),
+                    }
                 return result
             # If all options are null, treat as string
             return {"type": "string"}
