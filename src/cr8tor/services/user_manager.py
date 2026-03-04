@@ -65,7 +65,7 @@ def sync_keycloak_user(username, spec):
     # Set a temp password if the user was just created
     if user_created:
         if password:
-            keycloak_client.set_user_password(user_id, password, temporary=False)
+            keycloak_client.set_user_password(user_id, password, temporary=True)
             temp_password = password
             print(f"[INFO] Set password for {username} from spec")
         else:
