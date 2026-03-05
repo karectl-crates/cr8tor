@@ -46,9 +46,6 @@ def sync_keycloak_user(username, spec):
     # Always get the actual user_id (in case it was just created)
     user_id = keycloak_client.get_user_id(username)
 
-    for group in keycloak_client.get_user_groups(user_id):
-        keycloak_client.group_user_remove(user_id, group["id"])
-
     for group_entry in groups:
         # Groups can be plain strings or dicts with a 'value' key
         groupname = group_entry.get("value") if isinstance(group_entry, dict) else group_entry

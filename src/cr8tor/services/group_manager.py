@@ -21,6 +21,23 @@ def sync_keycloak_group(groupname, spec):
             {"name": groupname, "attributes": attributes}
         )
 
+    desired_usernames = set(members)
+
+    # Remove users no longer in spec (project access revocation).
+    try:
+        current_kc_members = keycloak_client.get_group_members(group_id)
+    except Exception as e:
+        print(f"[WARN] Could not fetch current members of {groupname}: {e}")
+        current_kc_members = []
+
+    for kc_member in current_kc_members:
+        if kc_member.get("username") not in desired_usernames:
+            try:
+                keycloak_client.group_user_remove(kc_member["id"], group_id)
+                print(f"[INFO] Removed {kc_member.get('username')} from {groupname} (no longer in spec)")
+            except Exception as e:
+                print(f"[WARN] Could not remove {kc_member.get('username')} from {groupname}: {e}")
+
     for username in members:
         try:
             user_id = keycloak_client.get_user_id(username)
