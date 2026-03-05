@@ -157,12 +157,12 @@ def ensure_limit_range(project_name, limit_config=None):
                 kubernetes.client.V1LimitRangeItem(
                     type="Container",
                     default={
-                        "cpu": limit_config.get("default_cpu", "500m"),
-                        "memory": limit_config.get("default_memory", "1Gi"),
+                        "cpu": limit_config.get("default_cpu") or "500m",
+                        "memory": limit_config.get("default_memory") or "1Gi",
                     },
                     default_request={
-                        "cpu": limit_config.get("default_request_cpu", "100m"),
-                        "memory": limit_config.get("default_request_memory", "256Mi"),
+                        "cpu": limit_config.get("default_request_cpu") or "100m",
+                        "memory": limit_config.get("default_request_memory") or "256Mi",
                     },
                 )
             ]

@@ -193,6 +193,7 @@ def create_deployment(
 
     # Read scheduling and storage extras from deployment config if available
     deployment_path = resources_dir.joinpath("deployment", "cr8-deployment.yaml")
+    deployment_config = {}
     deployment_resource_extras = {}
     if deployment_path.exists():
         with open(deployment_path) as f:
@@ -220,6 +221,8 @@ def create_deployment(
         "description": project_spec.description or project_props.name or "CR8TOR Project",
         "resources": serialised_resources,
     }
+    if deployment_config.get("limit_range"):
+        spec_dict["limit_range"] = deployment_config["limit_range"]
     project_crd = {
         "apiVersion": "research.karectl.io/v1alpha1",
         "kind": "Project",
