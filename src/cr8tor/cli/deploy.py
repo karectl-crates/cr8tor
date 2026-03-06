@@ -346,14 +346,6 @@ def create_deployment(
     for requesting_agent in governance.users:
         log.info(f"\nLoaded requesting agent: {requesting_agent.username}")
 
-        # Derive the group for this user
-        user_project_groups = [
-            {"value": group_name, "display": group_spec.description, "type": "Manual"}
-            for group_name, group_spec in group_definitions
-            if requesting_agent.username in (group_spec.members or [])
-        ]
-        log.info(f"User will be added to groups: {[g['value'] for g in user_project_groups]}")
-
         # Create UserSpec
         try:
             user_spec = User(
@@ -364,7 +356,6 @@ def create_deployment(
                 given_name=requesting_agent.given_name,
                 family_name=requesting_agent.family_name,
                 affiliation=requesting_agent.affiliation,
-                groups=user_project_groups,
                 password=requesting_agent.password,
             )
             log.info(f"Created UserSpec for {user_spec.username}")
@@ -372,14 +363,14 @@ def create_deployment(
             log.info(f"Failed to create UserSpec: {e}", err=True)
             raise typer.Exit(1)
 
-        # Create full User CRD
+        # Create full User CRD.
+        # project binding is managed entirely via Group CRDs, not the User CRD.
         user_crd = {
             "apiVersion": "identity.karectl.io/v1alpha1",
             "kind": "User",
             "metadata": {
                 "name": requesting_agent.username,
                 "labels": {
-                    "cr8tor.io/project-id": _sanitise_label(project_props.id or "unknown"),
                     "cr8tor.io/created-at": datetime.now().strftime("%Y%m%d"),
                 },
             },
