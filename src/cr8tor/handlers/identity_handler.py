@@ -35,41 +35,31 @@ logger = logging.getLogger(__name__)
 IDENTITY_NAMESPACE = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
 
 
-def get_user_projects(user_groups):
-    """Resolve all projects from a list of group memberships.
+def get_user_projects(username):
+    """ Resolve all projects the user has access to by scanning Group CRDs for membership.
 
     Args:
-        user_groups: List of group names or dicts (from User CRD spec.groups).
+        username: The username to look up across all Group CRD members lists.
     """
     api = kubernetes.client.CustomObjectsApi()
     projects = set()
 
-    for group in user_groups:
-        # Groups can be plain strings or dicts
-        if isinstance(group, dict):
-            group_name = group.get("value")
-        else:
-            group_name = group
-
-        if not group_name:
-            continue
-
-        try:
-            group_cr = api.get_namespaced_custom_object(
-                group="identity.k8tre.io",
-                version="v1alpha1",
-                namespace=IDENTITY_NAMESPACE,
-                plural="groups",
-                name=group_name,
-            )
-            group_projects = group_cr.get("spec", {}).get("projects", [])
-            projects.update(group_projects)
-            logger.info(f"Group {group_name} has projects: {group_projects}")
-        except ApiException as e:
-            if e.status == 404:
-                logger.warning(f"Group {group_name} not found")
-            else:
-                logger.error(f"Failed to fetch group {group_name}: {e}")
+    try:
+        all_groups = api.list_namespaced_custom_object(
+            group="identity.k8tre.io",
+            version="v1alpha1",
+            namespace=IDENTITY_NAMESPACE,
+            plural="groups",
+        )
+        for group_cr in all_groups.get("items", []):
+            members = group_cr.get("spec", {}).get("members", [])
+            if username in members:
+                group_name = group_cr.get("metadata", {}).get("name", "")
+                group_projects = group_cr.get("spec", {}).get("projects", [])
+                projects.update(group_projects)
+                logger.info(f"Group {group_name} has {username} as member, projects: {group_projects}")
+    except ApiException as e:
+        logger.error(f"Failed to list groups for project resolution of {username}: {e}")
 
     return projects
 
@@ -209,8 +199,6 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
         Provision notebook PVCs for the projects the user has access to.
     """
     username = spec["username"]
-    user_groups = spec.get("groups", [])
-
     ensure_realm_exists()
     result = sync_keycloak_user(username, spec)
 
@@ -219,41 +207,38 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
 
     kopf.info(meta, reason="UserSynced", message=f"User {username} synced.")
 
-    # Provision notebook PVCs for user's projects
-    if user_groups:
-        projects = get_user_projects(user_groups)
+    # Provision notebook PVCs for user's projects.
+    projects = get_user_projects(username)
 
-        if projects:
-            logger.info(f"Provisioning notebook storage for {username} in {len(projects)} projects: {projects}")
-            pvc_results = ensure_user_notebook_pvc(username, projects)
+    if projects:
+        logger.info(f"Provisioning notebook storage for {username} in {len(projects)} projects: {projects}")
+        pvc_results = ensure_user_notebook_pvc(username, projects)
 
-            # Track storage and status
-            provisioned = [pvc for pvc, reason in pvc_results.items() if reason.get("status") in ("created", "exists")]
-            skipped = [pvc for pvc, reason in pvc_results.items() if reason.get("status") == "skipped"]
-            errors = [pvc for pvc, reason in pvc_results.items() if reason.get("status") == "error"]
+        # Track storage and status
+        provisioned = [pvc for pvc, reason in pvc_results.items() if reason.get("status") in ("created", "exists")]
+        skipped = [pvc for pvc, reason in pvc_results.items() if reason.get("status") == "skipped"]
+        errors = [pvc for pvc, reason in pvc_results.items() if reason.get("status") == "error"]
 
-            patch.status["notebookStorage"] = {
-                "provisioned": provisioned,
-                "skipped": skipped,
-                "errors": errors,
-            }
+        patch.status["notebookStorage"] = {
+            "provisioned": provisioned,
+            "skipped": skipped,
+            "errors": errors,
+        }
 
-            if provisioned:
-                kopf.info(
-                    meta,
-                    reason="StorageProvisioned",
-                    message=f"Notebook storage provisioned for {username} in projects: {', '.join(provisioned)}",
-                )
-            if errors:
-                kopf.warn(
-                    meta,
-                    reason="StorageError",
-                    message=f"Failed to provision storage in projects: {', '.join(errors)}",
-                )
-        else:
-            logger.info(f"User {username} has groups but no projects configured")
+        if provisioned:
+            kopf.info(
+                meta,
+                reason="StorageProvisioned",
+                message=f"Notebook storage provisioned for {username} in projects: {', '.join(provisioned)}",
+            )
+        if errors:
+            kopf.warn(
+                meta,
+                reason="StorageError",
+                message=f"Failed to provision storage in projects: {', '.join(errors)}",
+            )
     else:
-        logger.info(f"User {username} has no groups, skipping storage provisioning")
+        logger.info(f"No project group memberships found for {username}, skipping storage provisioning")
 
 
 @kopf.on.delete("identity.k8tre.io", "v1alpha1", "user")
@@ -263,18 +248,16 @@ def user_delete(body, spec, meta, **kwargs):
         PVCs are cleaned up when Project is deleted (namespace cascading deletion)
     """
     username = spec["username"]
-    user_groups = spec.get("groups", [])
 
     delete_keycloak_user(username)
 
     # Update which PVCs will be retained
-    if user_groups:
-        projects = get_user_projects(user_groups)
-        if projects:
-            logger.info(
-                f"User {username} deleted. Notebook PVCs retained in projects: {projects}. "
-                "PVCs will be cleaned up when project is deleted."
-            )
+    projects = get_user_projects(username)
+    if projects:
+        logger.info(
+            f"User {username} deleted. Notebook PVCs retained in projects: {projects}. "
+            "PVCs will be cleaned up when project is deleted."
+        )
 
     kopf.info(meta, reason="UserDeleted", message=f"User {username} deleted. Notebook PVCs retained.")
 
