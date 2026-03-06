@@ -135,6 +135,7 @@ def ensure_user_notebook_pvc(username, projects, user_uid):
         user_uid: k8s metadata.uid of the User CRD
     """
     results = {}
+    project_uid_cache = {}
 
     for project_name in projects:
         try:
@@ -149,7 +150,16 @@ def ensure_user_notebook_pvc(username, projects, user_uid):
                 results[project_name] = {"status": "skipped", "reason": "no_storage_config"}
                 continue
 
-            project_uid = get_project_uid(project_name)
+            if project_name not in project_uid_cache:
+                try:
+                    project_uid_cache[project_name] = get_project_uid(project_name)
+                except ApiException as e:
+                    if e.status == 404:
+                        logger.warning(f"Project CRD {project_name} not found, skipping PVC for {username}")
+                        results[project_name] = {"status": "skipped", "reason": "project_crd_not_found"}
+                        continue
+                    raise
+            project_uid = project_uid_cache[project_name]
             pvc_name = get_pvc_name("notebook", user_uid, project_uid)
             labels = {
                 "karectl.io/user": username,
@@ -171,12 +181,8 @@ def ensure_user_notebook_pvc(username, projects, user_uid):
             results[project_name] = result
 
         except ApiException as e:
-            if e.status == 404:
-                logger.warning(f"Project namespace {project_name} not found, skipping PVC for {username}")
-                results[project_name] = {"status": "skipped", "reason": "namespace_not_found"}
-            else:
-                logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
-                results[project_name] = {"status": "error", "error": str(e)}
+            logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
+            results[project_name] = {"status": "error", "error": str(e)}
         except Exception as e:
             logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
             results[project_name] = {"status": "error", "error": str(e)}
