@@ -1,4 +1,9 @@
+import logging
+
+from keycloak.exceptions import KeycloakGetError, KeycloakDeleteError, KeycloakPutError
 from .client import get_client
+
+logger = logging.getLogger(__name__)
 
 
 def sync_keycloak_group(groupname, spec):
@@ -26,26 +31,29 @@ def sync_keycloak_group(groupname, spec):
     # Remove users no longer in spec (project access revocation).
     try:
         current_kc_members = keycloak_client.get_group_members(group_id)
-    except Exception as e:
-        print(f"[WARN] Could not fetch current members of {groupname}: {e}")
+    except KeycloakGetError as e:
+        logger.warning(f"Could not fetch current members of {groupname}: {e}")
         current_kc_members = []
 
     for kc_member in current_kc_members:
         if kc_member.get("username") not in desired_usernames:
+            member_id = kc_member["id"]
             try:
-                keycloak_client.group_user_remove(kc_member["id"], group_id)
-                print(f"[INFO] Removed {kc_member.get('username')} from {groupname} (no longer in spec)")
-            except Exception as e:
-                print(f"[WARN] Could not remove {kc_member.get('username')} from {groupname}: {e}")
+                keycloak_client.group_user_remove(member_id, group_id)
+                logger.info(f"Removed {kc_member.get('username')} (user_id={member_id}) from {groupname} (group_id={group_id})")
+            except KeycloakDeleteError as e:
+                logger.warning(f"Could not remove {kc_member.get('username')} (user_id={member_id}) from {groupname} (group_id={group_id}): {e}")
 
     for username in members:
         try:
             user_id = keycloak_client.get_user_id(username)
             keycloak_client.group_user_add(user_id, group_id)
-        except Exception as e:
-            print(f"Could not add {username} to {groupname}: {e}")
+        except KeycloakGetError as e:
+            logger.warning(f"Could not resolve user {username} for group {groupname} (group_id={group_id}): {e}")
+        except KeycloakPutError as e:
+            logger.warning(f"Could not add {username} to {groupname} (group_id={group_id}): {e}")
 
-    print(f"Synced group {groupname}")
+    logger.info(f"Synced group {groupname}")
 
 
 def delete_keycloak_group(groupname):
@@ -56,6 +64,6 @@ def delete_keycloak_group(groupname):
 
     if group:
         keycloak_client.delete_group(group[0]["id"])
-        print(f"Deleted group {groupname}")
+        logger.info(f"Deleted group {groupname}")
     else:
-        print(f"Group {groupname} not found")
+        logger.warning(f"Group {groupname} not found")

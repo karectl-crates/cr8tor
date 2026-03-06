@@ -346,14 +346,6 @@ def create_deployment(
     for requesting_agent in governance.users:
         log.info(f"\nLoaded requesting agent: {requesting_agent.username}")
 
-        # Project-scoped groups are managed via Group CRDs
-        governance_groups = [
-            {"value": group.value, "display": group.display, "type": group.type}
-            for group in (requesting_agent.groups or [])
-            if group.value
-        ]
-        log.info(f"User identity groups from governance: {[g['value'] for g in governance_groups]}")
-
         # Create UserSpec
         try:
             user_spec = User(
@@ -364,7 +356,6 @@ def create_deployment(
                 given_name=requesting_agent.given_name,
                 family_name=requesting_agent.family_name,
                 affiliation=requesting_agent.affiliation,
-                groups=governance_groups,
                 password=requesting_agent.password,
             )
             log.info(f"Created UserSpec for {user_spec.username}")

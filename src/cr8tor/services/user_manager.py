@@ -8,7 +8,6 @@ def sync_keycloak_user(username, spec):
     keycloak_client = get_client()
     email = spec.get("email")
     enabled = spec.get("enabled", True)
-    groups = spec.get("groups", [])
     password = spec.get("password")
     first_name = spec.get("given_name", "")
     last_name = spec.get("family_name", "")
@@ -45,19 +44,6 @@ def sync_keycloak_user(username, spec):
 
     # Always get the actual user_id (in case it was just created)
     user_id = keycloak_client.get_user_id(username)
-
-    for group_entry in groups:
-        # Groups can be plain strings or dicts with a 'value' key
-        groupname = group_entry.get("value") if isinstance(group_entry, dict) else group_entry
-        if not groupname:
-            continue
-        group = [
-            grp for grp in keycloak_client.get_groups() if grp["name"] == groupname
-        ]
-        if group:
-            keycloak_client.group_user_add(user_id, group[0]["id"])
-        else:
-            print(f"[WARN] Group {groupname} not found")
 
     # Set a temp password if the user was just created
     if user_created:
