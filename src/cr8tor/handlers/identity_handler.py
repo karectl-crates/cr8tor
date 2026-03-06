@@ -227,6 +227,7 @@ def cleanup_user_notebook_pvcs(username, projects):
 
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "user")
+@kopf.on.resume("identity.karectl.io", "v1alpha1", "user")
 def user_create_update(body, spec, meta, status, patch, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
