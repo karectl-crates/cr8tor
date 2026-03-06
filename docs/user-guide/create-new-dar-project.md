@@ -1,10 +1,50 @@
-# Creating a new DAR project
+# Creating a new Cr8tor project
 
-There are two ways we can create a new Data Access Request (DAR) project:
+There are three ways to create a new Data Access Request (DAR) project:
 
-1.) [Cr8tor CLI `Initiate` command](#cr8tor-cli-initiate-command)
+1.) [Cr8tor WebUI](#WebUI-App)
 
-2.) [GitHub Action Init RO-Crate project](#github-action-init-ro-crate-project)
+2.) [Cr8tor CLI `Initiate` command](#cr8tor-cli-initiate-command)
+
+3.) [GitHub Action Init RO-Crate project](#github-action-init-ro-crate-project)
+
+
+## WebUI App
+The Cr8tor WebUI (Cr8-WUI) app allows IG or data administrators to set up a new data project within an enterprise's TRE running Cr8tor via a web browser. Cr8-WUI acts as a standalone web app that can be run locally using Docker Desktop. Cr8-WUI dynamically creates a set of UI forms (based on Cr8tor's cannonical metamodel) to capture required contextual information Cr8tor needs to facilliate governance checks, semi-automated data ingress and TRE resource provision.
+
+Cr8-WUI is packaged as a single Docker image. To download and run the app:
+
+- Install Docker Desktop for [Windows](https://docs.docker.com/desktop/setup/install/windows-install/) or [MacOS](https://docs.docker.com/desktop/setup/install/mac-install/)
+
+- Open terminal and run:
+
+    ```bash
+    docker run -p 8000:8000 ghcr.io/karectl-crates/cr8tor-webui/cr8tor-webui:v0.0.3
+    ```
+- Open a web browser:
+    ```bash
+    http://localhost:8000
+    ```
+    ![alt text](img/image.png)
+
+- In the settings pane, Configure the web app to access the github repository your organisation has set up to manage cr8tor projects e.g.:
+
+    ![alt text](img/image-1.png)
+
+The github token provided should be a PAT token with permissions to raise pull requests on the projects repository.
+
+- Click update and test the details provided via 'Validate Credentials', you should see:
+
+    ![alt text](img/image-2.png)
+
+- Go to 'Create Project' to complete the web forms. The wizard requires an administrator to complete mandatory fields in the web form. On completion, Cr8-WUI will build the cr8tor project bundle on a separate branch on your enterprise's specified 'cr8tor projects' git repository and raise a pull request (PR) for review. 
+
+- To view  to the 'Projects' pane in the Cr8-WUI app to view the status of project PRs. An authorised administrator must review the PR and merge it before the c8tor 5-Safes workflow can be triggered via the 
+![alt text](img/projects-view.png)
+
+
+
+For TRE operators, we encourage you to fork and support its development from the Cr8tor WebUI [repository here](https://github.com/karectl-crates/cr8tor-webui).
 
 ## Cr8tor CLI `Initiate` command
 
