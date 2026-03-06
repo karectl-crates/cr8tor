@@ -3,7 +3,6 @@
 
 import logging
 import os
-import re
 
 import kubernetes
 from kubernetes.client.exceptions import ApiException
@@ -11,17 +10,15 @@ from kubernetes.client.exceptions import ApiException
 logger = logging.getLogger(__name__)
 
 
-def get_pvc_name(workspace_type, username, project):
+def get_pvc_name(workspace_type, user_uid, project_uid):
     """Generate PVC name for a workspace.
 
     Args:
         workspace_type: Type of workspace ('vdi' or 'notebook')
-        username: Username
-        project: Project name
+        user_uid: k8s metadata.uid of the User CRD
+        project_uid: k8s metadata.uid of the Project CRD
     """
-    safe_user = re.sub(r"[^a-z0-9-]", "", username.lower())
-    safe_project = re.sub(r"[^a-z0-9-]", "", project.lower())
-    return f"{workspace_type}-{safe_user}-{safe_project}"
+    return f"{workspace_type}-{user_uid}-{project_uid}"
 
 
 def get_bytes(size_str):
@@ -106,6 +103,24 @@ def _get_project_spec(project_name):
             logger.warning(f"Project {project_name} not found")
             return {}
         raise
+
+
+def get_project_uid(project_name):
+    """ Get the k8s metadata.uid of a Project CRD.
+
+    Args:
+        project_name: project name (CRD resource name)
+    """
+    api = kubernetes.client.CustomObjectsApi()
+    identity_namespace = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
+    project = api.get_namespaced_custom_object(
+        group="research.karectl.io",
+        version="v1alpha1",
+        plural="projects",
+        namespace=identity_namespace,
+        name=project_name,
+    )
+    return project["metadata"]["uid"]
 
 
 def _get_resource_entry(spec, resource_type):

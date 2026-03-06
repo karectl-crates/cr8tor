@@ -26,6 +26,7 @@ from cr8tor.services.storage_manager import (
     ensure_workspace_pvc,
     delete_workspace_pvc,
     get_pvc_name,
+    get_project_uid,
     resolve_notebook_storage_config,
 )
 
@@ -33,6 +34,23 @@ logger = logging.getLogger(__name__)
 
 # Namespace where User and Group CRDs are stored
 IDENTITY_NAMESPACE = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
+
+
+def _get_user_uid(username):
+    """Get the metadata.uid of a User CRD.
+
+    Args:
+        username: username (CRD resource name)
+    """
+    api = kubernetes.client.CustomObjectsApi()
+    user = api.get_namespaced_custom_object(
+        group="identity.k8tre.io",
+        version="v1alpha1",
+        plural="users",
+        namespace=IDENTITY_NAMESPACE,
+        name=username,
+    )
+    return user["metadata"]["uid"]
 
 
 def get_user_projects(username):
@@ -108,14 +126,16 @@ def get_group_members(group_name):
     return members
 
 
-def ensure_user_notebook_pvc(username, projects):
+def ensure_user_notebook_pvc(username, projects, user_uid):
     """Ensure notebook PVCs exist for a user in the projects.
 
     Args:
         username: username
         projects: Set/list of project names
+        user_uid: k8s metadata.uid of the User CRD
     """
     results = {}
+    project_uid_cache = {}
 
     for project_name in projects:
         try:
@@ -130,8 +150,17 @@ def ensure_user_notebook_pvc(username, projects):
                 results[project_name] = {"status": "skipped", "reason": "no_storage_config"}
                 continue
 
-            pvc_name = get_pvc_name("notebook", username, project_name)
-            # Tracker labels for PVC
+            if project_name not in project_uid_cache:
+                try:
+                    project_uid_cache[project_name] = get_project_uid(project_name)
+                except ApiException as e:
+                    if e.status == 404:
+                        logger.warning(f"Project CRD {project_name} not found, skipping PVC for {username}")
+                        results[project_name] = {"status": "skipped", "reason": "project_crd_not_found"}
+                        continue
+                    raise
+            project_uid = project_uid_cache[project_name]
+            pvc_name = get_pvc_name("notebook", user_uid, project_uid)
             labels = {
                 "k8tre.io/user": username,
                 "k8tre.io/project": project_name,
@@ -152,12 +181,8 @@ def ensure_user_notebook_pvc(username, projects):
             results[project_name] = result
 
         except ApiException as e:
-            if e.status == 404:
-                logger.warning(f"Project namespace {project_name} not found, skipping PVC for {username}")
-                results[project_name] = {"status": "skipped", "reason": "namespace_not_found"}
-            else:
-                logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
-                results[project_name] = {"status": "error", "error": str(e)}
+            logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
+            results[project_name] = {"status": "error", "error": str(e)}
         except Exception as e:
             logger.error(f"Failed to create notebook PVC for {username} in {project_name}: {e}")
             results[project_name] = {"status": "error", "error": str(e)}
@@ -173,13 +198,27 @@ def cleanup_user_notebook_pvcs(username, projects):
         projects: Set/list of project names to remove PVCs
     """
     results = {}
+    core_api = kubernetes.client.CoreV1Api()
 
     for project_name in projects:
         try:
             namespace = get_proj_namespace(project_name)
-            pvc_name = get_pvc_name("notebook", username, project_name)
-            result = delete_workspace_pvc(namespace, pvc_name)
-            logger.info(f"Notebook PVC cleanup for {username} in {project_name}: {result['status']}")
+            pvcs = core_api.list_namespaced_persistent_volume_claim(
+                namespace=namespace,
+                label_selector=(
+                    f"k8tre.io/user={username},"
+                    f"k8tre.io/project={project_name},"
+                    f"k8tre.io/workspace-type=notebook"
+                ),
+            )
+            if not pvcs.items:
+                logger.info(f"No notebook PVC found for {username} in {project_name}")
+                results[project_name] = {"status": "not_found"}
+                continue
+
+            for pvc in pvcs.items:
+                result = delete_workspace_pvc(namespace, pvc.metadata.name)
+                logger.info(f"Notebook PVC cleanup for {username} in {project_name}: {result['status']}")
             results[project_name] = result
 
         except Exception as e:
@@ -194,6 +233,7 @@ def cleanup_user_notebook_pvcs(username, projects):
 
 @kopf.on.create("identity.k8tre.io", "v1alpha1", "user")
 @kopf.on.update("identity.k8tre.io", "v1alpha1", "user")
+@kopf.on.resume("identity.k8tre.io", "v1alpha1", "user")
 def user_create_update(body, spec, meta, status, patch, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
@@ -208,11 +248,14 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
     kopf.info(meta, reason="UserSynced", message=f"User {username} synced.")
 
     # Provision notebook PVCs for user's projects.
+    # meta["uid"] is the User CRD's UID used to uniquely identify
+    # the user across project group membership changes.
+    user_uid = meta["uid"]
     projects = get_user_projects(username)
 
     if projects:
         logger.info(f"Provisioning notebook storage for {username} in {len(projects)} projects: {projects}")
-        pvc_results = ensure_user_notebook_pvc(username, projects)
+        pvc_results = ensure_user_notebook_pvc(username, projects, user_uid)
 
         # Track storage and status
         provisioned = [pvc for pvc, reason in pvc_results.items() if reason.get("status") in ("created", "exists")]
@@ -285,7 +328,15 @@ def group_create_update(body, spec, meta, patch, **kwargs):
 
             all_results = {}
             for username in members:
-                pvc_results = ensure_user_notebook_pvc(username, projects)
+                try:
+                    user_uid = _get_user_uid(username)
+                except ApiException as e:
+                    if e.status == 404:
+                        logger.warning(f"User CRD not found for {username}, skipping PVC provisioning")
+                        all_results[username] = {}
+                        continue
+                    raise
+                pvc_results = ensure_user_notebook_pvc(username, projects, user_uid)
                 all_results[username] = pvc_results
 
             # Summarise results
