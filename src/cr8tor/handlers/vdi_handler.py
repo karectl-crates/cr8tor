@@ -1,6 +1,7 @@
 """VDI Handler for managing VDIInstance custom resources using Kopf."""
 
 import logging
+import os
 
 import kopf
 import kubernetes
@@ -15,6 +16,7 @@ from cr8tor.services.storage_manager import (
     ensure_workspace_pvc,
     delete_workspace_pvc,
     get_pvc_name,
+    get_project_uid,
 )
 
 
@@ -175,7 +177,18 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
     storage_size, storage_class, persist, pvc_enabled = resolve_vdi_storage_config(spec, project)
 
     if pvc_enabled:
-        pvc_name = get_pvc_name("vdi", user, project)
+        identity_namespace = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
+        custom_api = kubernetes.client.CustomObjectsApi()
+        user_obj = custom_api.get_namespaced_custom_object(
+            group="identity.karectl.io",
+            version="v1alpha1",
+            plural="users",
+            namespace=identity_namespace,
+            name=user,
+        )
+        user_uid = user_obj["metadata"]["uid"]
+        project_uid = get_project_uid(project)
+        pvc_name = get_pvc_name("vdi", user_uid, project_uid)
         print(f"Storage enabled: size={storage_size}, class={storage_class}, persist={persist}", flush=True)
 
         # Create PVC for persistent home directory
