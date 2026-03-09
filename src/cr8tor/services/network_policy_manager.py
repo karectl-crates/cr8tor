@@ -54,7 +54,10 @@ spec:
     - fromEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: keycloak
-
+    # Allow from datashield namespace
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: datashield
   egress:
     # Allow all intra-namespace traffic
     - toEndpoints:
@@ -86,6 +89,10 @@ spec:
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: keycloak
+    # Allow to datashield namespace
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: datashield
     # Allow external/internet access
     - toEntities:
         - world
