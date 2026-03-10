@@ -180,7 +180,7 @@ def create_vdi(spec, name, namespace, patch, body, **kwargs):
         identity_namespace = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
         custom_api = kubernetes.client.CustomObjectsApi()
         user_obj = custom_api.get_namespaced_custom_object(
-            group="identity.karectl.io",
+            group="identity.k8tre.io",
             version="v1alpha1",
             plural="users",
             namespace=identity_namespace,

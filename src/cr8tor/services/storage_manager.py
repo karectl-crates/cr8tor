@@ -114,7 +114,7 @@ def get_project_uid(project_name):
     api = kubernetes.client.CustomObjectsApi()
     identity_namespace = os.environ.get("IDENTITY_NAMESPACE", "keycloak")
     project = api.get_namespaced_custom_object(
-        group="research.karectl.io",
+        group="research.k8tre.io",
         version="v1alpha1",
         plural="projects",
         namespace=identity_namespace,

@@ -17,8 +17,8 @@ from cr8tor_metamodel.datamodel.cr8tor_metamodel_pydantic import (
 )
 
 # Register generated models with K8s CRD metadata
-CRDRegistry.register("identity.karectl.io", "v1alpha1", "User", "users")(User)
-CRDRegistry.register("identity.karectl.io", "v1alpha1", "KeycloakClient", "keycloakclients")(KeycloakClientConfig)
-CRDRegistry.register("identity.karectl.io", "v1alpha1", "Group", "groups")(GroupSpec)
-CRDRegistry.register("research.karectl.io", "v1alpha1", "Project", "projects")(ProjectSpec)
-CRDRegistry.register("karectl.io", "v1alpha1", "VDIInstance", "vdiinstances")(VDI)
+CRDRegistry.register("identity.k8tre.io", "v1alpha1", "User", "users")(User)
+CRDRegistry.register("identity.k8tre.io", "v1alpha1", "KeycloakClient", "keycloakclients")(KeycloakClientConfig)
+CRDRegistry.register("identity.k8tre.io", "v1alpha1", "Group", "groups")(GroupSpec)
+CRDRegistry.register("research.k8tre.io", "v1alpha1", "Project", "projects")(ProjectSpec)
+CRDRegistry.register("k8tre.io", "v1alpha1", "VDIInstance", "vdiinstances")(VDI)
