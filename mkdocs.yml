@@ -20,6 +20,7 @@ nav:
   - Developer Guide:
     - Orchestration layer setup: developer-guide/orchestration-layer-setup.md
     - Source setup: developer-guide/source-setup.md
+    - Operator Architecture: developer-guide/operator-architecture.md
   - Cr8tor CLI App:
     - CLI Commands: cr8tor-cli/commands.md
     - Development: cr8tor-cli/development.md
