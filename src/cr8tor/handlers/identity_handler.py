@@ -297,16 +297,20 @@ async def user_create_update(body, spec, meta, status, patch, **kwargs):
 
     # Gitea team membership where we add user to teams based on groups
     if is_gitea_enabled() and user_groups:
+        logger.info(f"Gitea integration enabled, processing {len(user_groups)} groups for user {username}")
         gitea_teams_joined = []
 
         for group_name in user_groups:
             group_cr = get_group_crd(group_name)
             if not group_cr:
+                logger.warning(f"Group CRD {group_name} not found, skipping Gitea team membership")
                 continue
             group_gitea_config = group_cr.get("spec", {}).get("gitea", {}) or {}
             team_name = group_gitea_config.get("team_name") or group_name
+            group_projects = group_cr.get("spec", {}).get("projects", [])
+            logger.info(f"Processing group {group_name} -> team {team_name}, projects: {group_projects}")
 
-            for project_name in group_cr.get("spec", {}).get("projects", []):
+            for project_name in group_projects:
                 org_name = f"project-{project_name}"
                 try:
                     team_id = await gitea_get_team_id(org_name, team_name)
@@ -314,6 +318,22 @@ async def user_create_update(body, spec, meta, status, patch, **kwargs):
                         added = await gitea_add_user_to_team(team_id, username)
                         if added:
                             gitea_teams_joined.append(f"{org_name}/{team_name}")
+                            logger.info(f"Added {username} to Gitea team {org_name}/{team_name}")
+                        else:
+                            logger.warning(f"Failed to add {username} to existing Gitea team {org_name}/{team_name}")
+                    else:
+                        logger.warning(f"Gitea team {team_name} not found in org {org_name}, auto-creating...")
+                        # Auto-create team if it doesn't exist
+                        permission = group_gitea_config.get("permission", "write")
+                        team_result = await gitea_ensure_team(org_name, team_name, permission)
+                        team_id = team_result.get("team_id")
+                        if team_id:
+                            added = await gitea_add_user_to_team(team_id, username)
+                            if added:
+                                gitea_teams_joined.append(f"{org_name}/{team_name}")
+                                logger.info(f"Created team and added {username} to {org_name}/{team_name}")
+                        else:
+                            logger.error(f"Could not create Gitea team {team_name} in org {org_name}")
                 except Exception as e:
                     logger.warning(f"Could not add {username} to Gitea team {org_name}/{team_name}: {e}")
 
