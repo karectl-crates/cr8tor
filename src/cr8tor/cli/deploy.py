@@ -146,17 +146,7 @@ def create_deployment(
                             ],
                         ),
                     ),
-                    ProfileConfig(
-                        display_name="R Statistical Computing",
-                        slug="r-stats",
-                        description="R environment for statistical analysis",
-                        kubespawner_override=KubespawnerOverride(
-                            image="rocker/tidyverse:latest",
-                            env=[
-                                EnvironmentVariable(name="DISABLE_AUTH", value="true"),
-                            ],
-                        ),
-                    ),
+
                 ],
             ),
             # VDI (guacamole) is a capability so no need to control per user level
