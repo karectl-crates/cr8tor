@@ -39,7 +39,7 @@ async def ensure_organisation(
     }
 
     try:
-        org = await client.post(f"/api/v1/admin/users/{org_name}/orgs", payload)
+        org = await client.post(f"/api/v1/orgs", payload)
         logger.info(f"Created Gitea organisation: {org_name}")
         return {"created": True, "org": org}
     except HTTPStatusError as e:
@@ -83,12 +83,25 @@ async def ensure_team(org_name, team_name, permission="write"):
         logger.info(f"Gitea team '{team_name}' already exists in org '{org_name}'")
         return {"team_id": existing_team_id, "created": False}
 
+    # Default repository units that the team can access
+    default_units = [
+        "repo.code",
+        "repo.issues",
+        "repo.pulls",
+        "repo.releases",
+        "repo.wiki",
+        "repo.projects",
+        "repo.packages",
+        "repo.actions",
+    ]
+
     # Create team
     payload = {
         "name": team_name,
         "permission": permission,
         "includes_all_repositories": True,
         "can_create_org_repo": permission in ("write", "admin"),
+        "units": default_units,
     }
     try:
         team = await client.post(f"/api/v1/orgs/{org_name}/teams", payload)
@@ -195,7 +208,7 @@ async def ensure_repository(
     }
 
     try:
-        repo = await client.post(f"/api/v1/org/{org_name}/repos", payload)
+        repo = await client.post(f"/api/v1/orgs/{org_name}/repos", payload)
         logger.info(f"Created Gitea repository: {org_name}/{repo_name}")
         return {"created": True, "repo": repo}
     except HTTPStatusError as e:
