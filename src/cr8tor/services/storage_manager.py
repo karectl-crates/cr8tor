@@ -75,12 +75,18 @@ def get_helm_storage_config():
         return value if value else None
 
     return {
+        # RWO workspace storage (notebook / VDI)
         "maxVdiSize": get_env_or_none("STORAGE_MAX_VDI_SIZE"),
         "maxNotebookSize": get_env_or_none("STORAGE_MAX_NOTEBOOK_SIZE"),
         "defaultVdiSize": get_env_or_none("STORAGE_DEFAULT_VDI_SIZE"),
         "defaultNotebookSize": get_env_or_none("STORAGE_DEFAULT_NOTEBOOK_SIZE"),
         "defaultStorageClass": get_env_or_none("STORAGE_DEFAULT_STORAGE_CLASS"),  # None = cluster default
         "defaultPersist": os.environ.get("STORAGE_DEFAULT_PERSIST", "false").lower() == "true",
+        # RWX project storage (shared / readonly)
+        "defaultSharedStorageClass": get_env_or_none("STORAGE_DEFAULT_SHARED_STORAGE_CLASS"),
+        "defaultSharedSize": get_env_or_none("STORAGE_DEFAULT_SHARED_SIZE"),
+        "defaultReadonlyStorageClass": get_env_or_none("STORAGE_DEFAULT_READONLY_STORAGE_CLASS"),
+        "defaultReadonlySize": get_env_or_none("STORAGE_DEFAULT_READONLY_SIZE"),
     }
 
 
@@ -329,6 +335,83 @@ def list_project_pvcs(namespace):
     except ApiException as e:
         logger.error(f"Failed to list PVCs in {namespace}: {e}")
         raise
+
+
+def resolve_project_storage_config(project_name, workspace_type):
+    """Resolve size and storage class for a project-level PVC.
+
+    Args:
+        project_name: Name of the project
+        workspace_type: 'shared' or 'readonly'
+
+    Priority: Project CRD > Helm default
+    """
+    helm_config = get_helm_storage_config()
+    spec = _get_project_spec(project_name)
+    project_config = _get_resource_entry(spec, "Jupyter").get("storage") or spec.get("storage") or {}
+
+    wt = workspace_type.capitalize()
+    storage_class = (
+        project_config.get(f"{workspace_type}_storage_class")
+        or helm_config.get(f"default{wt}StorageClass")
+    )
+    size = (
+        project_config.get(f"default_{workspace_type}_size")
+        or helm_config.get(f"default{wt}Size")
+    )
+
+    if size is None:
+        logger.info(f"No {workspace_type} storage size configured for project {project_name}")
+        return None, None
+
+    return size, storage_class
+
+
+def ensure_project_pvc(namespace, project_uid, project_name, workspace_type, size, storage_class=None):
+    """Create a project-level RWX pvc if it doesn't exist.
+
+    Args:
+        namespace:  name of the namespace
+        project_uid: k8s metadata.uid of the project crd
+        project_name: Project name
+        workspace_type: 'shared' or 'readonly'
+        size: Storage size
+        storage_class: StorageClass name
+    """
+    api = kubernetes.client.CoreV1Api()
+    pvc_name = f"{workspace_type}-{project_uid}"
+
+    labels = {
+        "karectl.io/managed-by": "cr8tor",
+        "karectl.io/resource-type": "project-storage",
+        "karectl.io/project": project_name,
+        "karectl.io/workspace-type": f"project-{workspace_type}",
+    }
+
+    pvc_spec = kubernetes.client.V1PersistentVolumeClaimSpec(
+        access_modes=["ReadWriteMany"],
+        resources=kubernetes.client.V1ResourceRequirements(requests={"storage": size}),
+    )
+    if storage_class:
+        pvc_spec.storage_class_name = storage_class
+
+    pvc_body = kubernetes.client.V1PersistentVolumeClaim(
+        metadata=kubernetes.client.V1ObjectMeta(name=pvc_name, namespace=namespace, labels=labels),
+        spec=pvc_spec,
+    )
+
+    try:
+        api.read_namespaced_persistent_volume_claim(name=pvc_name, namespace=namespace)
+        logger.info(f"{workspace_type} PVC {pvc_name} already exists in {namespace}")
+        return {"status": "exists", "name": pvc_name, "namespace": namespace}
+    except ApiException as e:
+        if e.status == 404:
+            api.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc_body)
+            logger.info(f"Created {workspace_type} PVC {pvc_name} in {namespace} ({size})")
+            return {"status": "created", "name": pvc_name, "namespace": namespace}
+        else:
+            logger.error(f"Failed to check/create {workspace_type} PVC {pvc_name}: {e}")
+            raise
 
 
 def resolve_scheduling_config(vdi_spec, project_name):

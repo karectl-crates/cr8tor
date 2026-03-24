@@ -104,6 +104,22 @@ spec:
             {{- end }}
             - name: STORAGE_DEFAULT_PERSIST
               value: {{ .Values.storage.defaultPersist | quote }}
+            {{- if .Values.storage.defaultSharedStorageClass }}
+            - name: STORAGE_DEFAULT_SHARED_STORAGE_CLASS
+              value: {{ .Values.storage.defaultSharedStorageClass | quote }}
+            {{- end }}
+            {{- if .Values.storage.defaultSharedSize }}
+            - name: STORAGE_DEFAULT_SHARED_SIZE
+              value: {{ .Values.storage.defaultSharedSize | quote }}
+            {{- end }}
+            {{- if .Values.storage.defaultReadonlyStorageClass }}
+            - name: STORAGE_DEFAULT_READONLY_STORAGE_CLASS
+              value: {{ .Values.storage.defaultReadonlyStorageClass | quote }}
+            {{- end }}
+            {{- if .Values.storage.defaultReadonlySize }}
+            - name: STORAGE_DEFAULT_READONLY_SIZE
+              value: {{ .Values.storage.defaultReadonlySize | quote }}
+            {{- end }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
             - name: vdi-templates
