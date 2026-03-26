@@ -95,8 +95,8 @@ storage:
   # Default persist behavior (false = delete PVC on VDI delete)
   defaultPersist: false
   # Shared project storage (ReadWriteMany - all members read/write)
-  defaultSharedStorageClass: "rwx-default"
+  defaultSharedStorageClass: ""
   defaultSharedSize: ""
   # Read-only project storage (ReadWriteMany - members mount readOnly)
-  defaultReadonlyStorageClass: "rwx-default"
+  defaultReadonlyStorageClass: ""
   defaultReadonlySize: ""

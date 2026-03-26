@@ -504,7 +504,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     proj_namespace = get_proj_namespace(project_name)
     for workspace_type in ("shared", "readonly"):
         try:
-            size, storage_class = resolve_project_storage_config(project_name, workspace_type)
+            size, storage_class = resolve_project_storage_config(project_name, workspace_type, spec)
             if size:
                 result = ensure_project_pvc(
                     namespace=proj_namespace,

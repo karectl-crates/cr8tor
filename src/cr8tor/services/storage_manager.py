@@ -233,34 +233,26 @@ def resolve_vdi_storage_config(vdi_spec, project_name):
     return final_size, storage_class, persist, True
 
 
-def ensure_workspace_pvc(namespace, pvc_name, size, storage_class=None, labels=None):
-    """ Create PVC if it doesn't exist.
+def _ensure_pvc(namespace, pvc_name, size, access_modes, labels, storage_class=None):
+    """Create a PVC if it doesn't exist.
 
     Args:
         namespace: Kubernetes namespace
         pvc_name: Name for the PVC
         size: Storage size (e.g., '20Gi')
+        access_modes: List of access modes (e.g., ['ReadWriteOnce'])
+        labels: labels: Optional labels dict
         storage_class: StorageClass name (None = use cluster default)
-        labels: Optional labels dict
     """
     api = kubernetes.client.CoreV1Api()
 
-    if labels is None:
-        labels = {}
-
-    labels.update({
-        "karectl.io/managed-by": "cr8tor",
-        "karectl.io/resource-type": "workspace-storage",
-    })
-
     # Build PVC spec
     pvc_spec = kubernetes.client.V1PersistentVolumeClaimSpec(
-        access_modes=["ReadWriteOnce"],
+        access_modes=access_modes,
         resources=kubernetes.client.V1ResourceRequirements(
             requests={"storage": size}
         ),
     )
-
     if storage_class:
         pvc_spec.storage_class_name = storage_class
 
@@ -274,22 +266,34 @@ def ensure_workspace_pvc(namespace, pvc_name, size, storage_class=None, labels=N
     )
 
     try:
-        existing = api.read_namespaced_persistent_volume_claim(
-            name=pvc_name, namespace=namespace
-        )
-        logger.info(f"PVC {pvc_name} already exists in {namespace}")
-        return {"status": "exists", "name": pvc_name, "namespace": namespace}
-
+        api.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc_body)
+        logger.info(f"Created PVC {pvc_name} in {namespace} ({size})")
+        return {"status": "created", "name": pvc_name, "namespace": namespace}
     except ApiException as e:
-        if e.status == 404:
-            api.create_namespaced_persistent_volume_claim(
-                namespace=namespace, body=pvc_body
-            )
-            logger.info(f"Created PVC {pvc_name} in {namespace} ({size})")
-            return {"status": "created", "name": pvc_name, "namespace": namespace}
+        if e.status == 409:
+            logger.info(f"PVC {pvc_name} already exists in {namespace}")
+            return {"status": "exists", "name": pvc_name, "namespace": namespace}
         else:
-            logger.error(f"Failed to check/create PVC {pvc_name}: {e}")
+            logger.error(f"Failed to create PVC {pvc_name}: {e}")
             raise
+
+
+def ensure_workspace_pvc(namespace, pvc_name, size, storage_class=None, labels=None):
+    """Create workspace PVC if it doesn't exist.
+
+    Args:
+        namespace: k8s namespace
+        pvc_name: Name for the PVC
+        size: Storage size
+        storage_class: StorageClass name
+        labels: Optional labels dict
+    """
+    merged_labels = labels or {}
+    merged_labels.update({
+        "karectl.io/managed-by": "cr8tor",
+        "karectl.io/resource-type": "workspace-storage",
+    })
+    return _ensure_pvc(namespace, pvc_name, size, ["ReadWriteOnce"], merged_labels, storage_class)
 
 
 def delete_workspace_pvc(namespace, pvc_name):
@@ -337,17 +341,19 @@ def list_project_pvcs(namespace):
         raise
 
 
-def resolve_project_storage_config(project_name, workspace_type):
+def resolve_project_storage_config(project_name, workspace_type, spec=None):
     """Resolve size and storage class for a project-level PVC.
 
     Args:
         project_name: Name of the project
         workspace_type: 'shared' or 'readonly'
+        spec: Optional pre-fetched Project CRD spec (fetched from API if not provided)
 
     Priority: Project CRD > Helm default
     """
     helm_config = get_helm_storage_config()
-    spec = _get_project_spec(project_name)
+    if spec is None:
+        spec = _get_project_spec(project_name)
     project_config = _get_resource_entry(spec, "Jupyter").get("storage") or spec.get("storage") or {}
 
     wt = workspace_type.capitalize()
@@ -360,7 +366,7 @@ def resolve_project_storage_config(project_name, workspace_type):
         or helm_config.get(f"default{wt}Size")
     )
 
-    if size is None:
+    if not size:
         logger.info(f"No {workspace_type} storage size configured for project {project_name}")
         return None, None
 
@@ -368,50 +374,24 @@ def resolve_project_storage_config(project_name, workspace_type):
 
 
 def ensure_project_pvc(namespace, project_uid, project_name, workspace_type, size, storage_class=None):
-    """Create a project-level RWX pvc if it doesn't exist.
+    """Create a project-level RWX PVC if it doesn't exist.
 
     Args:
-        namespace:  name of the namespace
+        namespace: name of the namespace
         project_uid: k8s metadata.uid of the project crd
         project_name: Project name
         workspace_type: 'shared' or 'readonly'
         size: Storage size
         storage_class: StorageClass name
     """
-    api = kubernetes.client.CoreV1Api()
     pvc_name = f"{workspace_type}-{project_uid}"
-
     labels = {
         "karectl.io/managed-by": "cr8tor",
         "karectl.io/resource-type": "project-storage",
         "karectl.io/project": project_name,
         "karectl.io/workspace-type": f"project-{workspace_type}",
     }
-
-    pvc_spec = kubernetes.client.V1PersistentVolumeClaimSpec(
-        access_modes=["ReadWriteMany"],
-        resources=kubernetes.client.V1ResourceRequirements(requests={"storage": size}),
-    )
-    if storage_class:
-        pvc_spec.storage_class_name = storage_class
-
-    pvc_body = kubernetes.client.V1PersistentVolumeClaim(
-        metadata=kubernetes.client.V1ObjectMeta(name=pvc_name, namespace=namespace, labels=labels),
-        spec=pvc_spec,
-    )
-
-    try:
-        api.read_namespaced_persistent_volume_claim(name=pvc_name, namespace=namespace)
-        logger.info(f"{workspace_type} PVC {pvc_name} already exists in {namespace}")
-        return {"status": "exists", "name": pvc_name, "namespace": namespace}
-    except ApiException as e:
-        if e.status == 404:
-            api.create_namespaced_persistent_volume_claim(namespace=namespace, body=pvc_body)
-            logger.info(f"Created {workspace_type} PVC {pvc_name} in {namespace} ({size})")
-            return {"status": "created", "name": pvc_name, "namespace": namespace}
-        else:
-            logger.error(f"Failed to check/create {workspace_type} PVC {pvc_name}: {e}")
-            raise
+    return _ensure_pvc(namespace, pvc_name, size, ["ReadWriteMany"], labels, storage_class)
 
 
 def resolve_scheduling_config(vdi_spec, project_name):
