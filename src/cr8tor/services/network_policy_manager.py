@@ -90,7 +90,7 @@ spec:
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: keycloak
-    # Allow from datashield namespace (opal/datashield)
+    # Allow to datashield namespace (opal/datashield)
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: datashield
