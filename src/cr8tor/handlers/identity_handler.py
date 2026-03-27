@@ -481,10 +481,19 @@ def project_create_update(body, spec, meta, patch, **kwargs):
             message=f"Failed to ensure RoleBinding for {project_name}: {e}",
         )
 
-    # CiliumNetworkPolicy in the project namespace
+    # CiliumNetworkPolicy in the project namespace.
+    # Datashield namespace access is only granted to projects which are enabled
+    datashield_enabled = any(
+        r.get("resource_type") == "DataSHIELD" and r.get("enabled", True)
+        for r in resources
+    )
     try:
         ns_name = get_proj_namespace(project_name)
-        policy_result = create_project_network_policy(project_name, namespace=ns_name)
+        policy_result = create_project_network_policy(
+            project_name,
+            namespace=ns_name,
+            datashield_enabled=datashield_enabled,
+        )
         kopf.info(
             meta,
             reason="NetworkPolicyCreated",
