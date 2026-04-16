@@ -1,18 +1,53 @@
+from datetime import date
 from keycloak.exceptions import KeycloakGetError, KeycloakPutError, KeycloakDeleteError
 from .client import get_client
 from .utils import generate_temp_password, write_passwords
+
+
+def _parse_date(value):
+    """Parse a date based on format"""
+    if isinstance(value, date):
+        return value
+    return date.fromisoformat(str(value)[:10])
+
+
+def _resolve_enabled(spec):
+    """ Return False if start_date is in the future or expiry_date has passed"""
+    enabled = spec.get("enabled", True)
+    today = date.today()
+    start_date = spec.get("start_date")
+    expiry_date = spec.get("expiry_date")
+
+    if start_date:
+        if today < _parse_date(start_date):
+            return False
+
+    if expiry_date:
+        if today > _parse_date(expiry_date):
+            return False
+
+    return enabled
 
 
 def sync_keycloak_user(username, spec):
     """Sync a user to Keycloak."""
     keycloak_client = get_client()
     email = spec.get("email")
-    enabled = spec.get("enabled", True)
     password = spec.get("password")
     first_name = spec.get("given_name", "")
     last_name = spec.get("family_name", "")
     user_created = False
     temp_password = None
+
+    enabled = _resolve_enabled(spec)
+    if enabled != spec.get("enabled", True):
+        print(f"Account {username} disabled by policy (start_date={spec.get('start_date')}, expiry_date={spec.get('expiry_date')})")
+
+    attributes = {}
+    if spec.get("start_date"):
+        attributes["start_date"] = [str(_parse_date(spec["start_date"]))]
+    if spec.get("expiry_date"):
+        attributes["expiry_date"] = [str(_parse_date(spec["expiry_date"]))]
 
     user_payload = {
         "username": username,
@@ -21,6 +56,8 @@ def sync_keycloak_user(username, spec):
         "firstName": first_name,
         "lastName": last_name,
     }
+    if attributes:
+        user_payload["attributes"] = attributes
 
     # Try to get the user first
     try:
