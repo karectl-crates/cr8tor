@@ -13,3 +13,7 @@ resources:
     url: https://auth.example.org
     enabled: true
     realm: dev-tre
+
+  - name: opal
+    resource_type: DataSHIELD
+    enabled: true

@@ -6,6 +6,7 @@ Plan for custom CiliumNetworkPolicy per project namespace:
 - Allows DNS resolution via kube-dns
 - Allows external/internet access
 - Cross-project isolation so different namespaces can't communicate
+- Datashield namespace access granted only to projects with a Datashield resource
 """
 
 import logging
@@ -53,7 +54,7 @@ spec:
     # Allow from keycloak namespace
     - fromEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: keycloak
+            k8s:io.kubernetes.pod.namespace: keycloak{datashield_ingress}
 
   egress:
     # Allow all intra-namespace traffic
@@ -85,19 +86,34 @@ spec:
     # Allow to keycloak namespace (authentication)
     - toEndpoints:
         - matchLabels:
-            k8s:io.kubernetes.pod.namespace: keycloak
+            k8s:io.kubernetes.pod.namespace: keycloak{datashield_egress}
     # Allow external/internet access
     - toEntities:
         - world
 """
 
+# Optional rule appended to ingress/egress only for federation projects.
+_DATASHIELD_INGRESS = """
+    # Allow from datashield namespace (opal/datashield)
+    - fromEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: datashield"""
 
-def create_project_network_policy(project_name, namespace):
+_DATASHIELD_EGRESS = """
+    # Allow to datashield namespace (opal/datashield)
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: datashield"""
+
+
+def create_project_network_policy(project_name, namespace, datashield_enabled=False):
     """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
         project_name: Name of the project
         namespace: Project namespace
+        datashield_enabled: When True, adds ingress/egress rules for the
+            datashield namespace.
 
     Returns:
         dict with status of the operation
@@ -107,6 +123,8 @@ def create_project_network_policy(project_name, namespace):
     policy_yaml = NAMESPACE_NETWORK_POLICY_TEMPLATE.format(
         project_name=project_name,
         namespace=namespace,
+        datashield_ingress=_DATASHIELD_INGRESS if datashield_enabled else "",
+        datashield_egress=_DATASHIELD_EGRESS if datashield_enabled else "",
     )
     policy_body = yaml.safe_load(policy_yaml)
 
@@ -127,7 +145,7 @@ def create_project_network_policy(project_name, namespace):
             name=policy_name,
             body=policy_body,
         )
-        logger.info(f"Updated CiliumNetworkPolicy in {namespace}")
+        logger.info(f"Updated CiliumNetworkPolicy in {namespace} (datashield_enabled={datashield_enabled})")
         return {"status": "updated", "name": policy_name, "namespace": namespace}
 
     except ApiException as e:
@@ -139,7 +157,7 @@ def create_project_network_policy(project_name, namespace):
                 plural="ciliumnetworkpolicies",
                 body=policy_body,
             )
-            logger.info(f"Created CiliumNetworkPolicy in {namespace}")
+            logger.info(f"Created CiliumNetworkPolicy in {namespace} (datashield_enabled={datashield_enabled})")
             return {"status": "created", "name": policy_name, "namespace": namespace}
         else:
             logger.error(f"Failed to create/update CiliumNetworkPolicy in {namespace}: {e}")
