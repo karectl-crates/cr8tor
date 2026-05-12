@@ -4,7 +4,6 @@ Plan for custom CiliumNetworkPolicy per project namespace:
 - Allows all intra-namespace traffic (same project)
 - Allows traffic from/to infrastructure namespaces (jupyterhub, backend, cr8tor, keycloak)
 - Allows DNS resolution via kube-dns
-- Allows external/internet access
 - Cross-project isolation so different namespaces can't communicate
 """
 
@@ -86,9 +85,6 @@ spec:
     - toEndpoints:
         - matchLabels:
             k8s:io.kubernetes.pod.namespace: keycloak
-    # Allow external/internet access
-    - toEntities:
-        - world
 """
 
 
