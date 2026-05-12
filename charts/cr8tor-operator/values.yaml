@@ -94,3 +94,9 @@ storage:
   maxNotebookSize: ""
   # Default persist behavior (false = delete PVC on VDI delete)
   defaultPersist: false
+  # Shared project storage (ReadWriteMany - all members read/write)
+  defaultSharedStorageClass: ""
+  defaultSharedSize: ""
+  # Read-only project storage (ReadWriteMany - members mount readOnly)
+  defaultReadonlyStorageClass: ""
+  defaultReadonlySize: ""

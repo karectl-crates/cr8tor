@@ -28,6 +28,8 @@ from cr8tor.services.storage_manager import (
     get_pvc_name,
     get_project_uid,
     resolve_notebook_storage_config,
+    resolve_project_storage_config,
+    ensure_project_pvc,
 )
 
 logger = logging.getLogger(__name__)
@@ -496,6 +498,35 @@ def project_create_update(body, spec, meta, patch, **kwargs):
             reason="NetworkPolicyFailed",
             message=f"Failed to create network policy for {project_name}: {e}",
         )
+
+    # Project-level shared and read-only storage
+    project_uid = meta["uid"]
+    proj_namespace = get_proj_namespace(project_name)
+    for workspace_type in ("shared", "readonly"):
+        try:
+            size, storage_class = resolve_project_storage_config(project_name, workspace_type, spec)
+            if size:
+                result = ensure_project_pvc(
+                    namespace=proj_namespace,
+                    project_uid=project_uid,
+                    project_name=project_name,
+                    workspace_type=workspace_type,
+                    size=size,
+                    storage_class=storage_class,
+                )
+                kopf.info(
+                    meta,
+                    reason=f"{workspace_type.capitalize()}StorageReady",
+                    message=f"Project {workspace_type} storage {result['status']}: {result['name']}",
+                )
+            else:
+                logger.info(f"No {workspace_type} storage configured for project {project_name}, skipping")
+        except Exception as e:
+            kopf.warn(
+                meta,
+                reason=f"{workspace_type.capitalize()}StorageFailed",
+                message=f"Failed to ensure {workspace_type} storage for {project_name}: {e}",
+            )
 
     patch.status["namespace"] = get_proj_namespace(project_name)
     kopf.info(
