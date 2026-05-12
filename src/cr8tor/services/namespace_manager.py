@@ -89,10 +89,10 @@ def ensure_resource_quota(project_name, quota_config=None):
         quota_config = {}
 
     hard = {
-        "requests.cpu": quota_config.get("requests_cpu", "32"),
-        "requests.memory": quota_config.get("requests_memory", "64Gi"),
-        "limits.cpu": quota_config.get("limits_cpu", "64"),
-        "limits.memory": quota_config.get("limits_memory", "128Gi"),
+        "requests.cpu": quota_config.get("requests_cpu", "12"),
+        "requests.memory": quota_config.get("requests_memory", "24Gi"),
+        "limits.cpu": quota_config.get("limits_cpu", "48"),
+        "limits.memory": quota_config.get("limits_memory", "120Gi"),
         "pods": quota_config.get("pods", "80"),
         "services": quota_config.get("services", "30"),
         "persistentvolumeclaims": quota_config.get("persistentvolumeclaims", "80"),
