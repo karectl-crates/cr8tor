@@ -236,13 +236,19 @@ def cleanup_user_notebook_pvcs(username, projects):
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.resume("identity.karectl.io", "v1alpha1", "user")
-def user_create_update(body, spec, meta, status, patch, **kwargs):
+def user_create_update(body, spec, meta, status, patch, diff, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
     """
     username = spec["username"]
     ensure_realm_exists()
-    result = sync_keycloak_user(username, spec)
+
+    # Force a new temporary password when the spec password field is explicitly added or changed.
+    password_changed = any(
+        field == ("spec", "password") and op in ("add", "change")
+        for op, field, _, _ in (diff or [])
+    )
+    result = sync_keycloak_user(username, spec, force_password_reset=password_changed)
 
     if result and "password" in result:
         patch.status["initialPassword"] = result["password"]
