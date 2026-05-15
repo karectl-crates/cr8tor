@@ -46,6 +46,9 @@ def ensure_realm_exists(realm_name=None, display_name=None):
         "verifyEmail": False,
         "requiredCredentials": ["password"],
         "defaultRoles": ["offline_access", "uma_authorization", "user"],
+        "requiredActions": [
+            {"alias": "UPDATE_PASSWORD", "providerId": "UPDATE_PASSWORD", "enabled": True, "defaultAction": False, "priority": 30, "config": {}},
+        ],
     }
     admin_client.create_realm(payload=payload)
     print(f"[Keycloak] Realm '{realm_name}' created.")
