@@ -97,7 +97,7 @@ data:
           {{ "{% endif %}" }}
         - name: init-scripts
           configMap:
-            name: {{ include "cr8tor-operator.fullname" . }}-init-scripts
+            name: vdi-init-scripts
             defaultMode: 0755
       terminationGracePeriodSeconds: 10
       {{ "{% if scheduling and scheduling.node_selector %}" }}

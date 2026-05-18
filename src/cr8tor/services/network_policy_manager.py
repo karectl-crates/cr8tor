@@ -97,9 +97,6 @@ spec:
         - ports:
             - port: "3000"
               protocol: TCP
-    # Allow external/internet access
-    - toEntities:
-        - world
 """
 
 
