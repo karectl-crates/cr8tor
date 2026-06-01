@@ -7,7 +7,7 @@ For further technical documentation and developer gudiance go to the CR8tor info
 
 ## License
 
-This project from v0.2 onward is dual-licensed under [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html) and is also available under commercial license terms.
+From v0.2 onward, this project is available under the [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.en.html) or, alternatively, under a commercial license.
 
 The AGPL version is intended for community use, research, evaluation, and open-source development.
 
