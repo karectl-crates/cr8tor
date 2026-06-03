@@ -140,6 +140,7 @@ spec:
             {{- if .Values.storage.defaultReadonlySize }}
             - name: STORAGE_DEFAULT_READONLY_SIZE
               value: {{ .Values.storage.defaultReadonlySize | quote }}
+            {{- end }}
             # Gitea configuration
             {{- if .Values.gitea.enabled }}
             - name: GITEA_URL

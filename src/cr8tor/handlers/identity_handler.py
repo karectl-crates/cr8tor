@@ -38,6 +38,7 @@ from cr8tor.services.gitea import (
     ensure_team as gitea_ensure_team,
     get_team_id as gitea_get_team_id,
     add_user_to_team as gitea_add_user_to_team,
+    remove_user_from_team as gitea_remove_user_from_team,
     ensure_repository as gitea_ensure_repository,
 )
 
@@ -71,6 +72,7 @@ def get_user_projects(username):
         username: The username to look up across all Group CRD members lists.
     """
     projects = set()
+    api = kubernetes.client.CustomObjectsApi()
 
     try:
         all_groups = api.list_namespaced_custom_object(
@@ -90,6 +92,31 @@ def get_user_projects(username):
         logger.error(f"Failed to list groups for project resolution of {username}: {e}")
 
     return projects
+
+
+def get_group_crd(group_name):
+    """Fetch a Group CRD by name.
+
+    Args:
+        group_name: Name of the group (CRD resource name)
+
+    Returns:
+        The Group CRD dict, or None if not found.
+    """
+    api = kubernetes.client.CustomObjectsApi()
+    try:
+        return api.get_namespaced_custom_object(
+            group="identity.karectl.io",
+            version="v1alpha1",
+            namespace=IDENTITY_NAMESPACE,
+            plural="groups",
+            name=group_name,
+        )
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        logger.error(f"Failed to get group CRD {group_name}: {e}")
+        return None
 
 
 def get_group_members(group_name):
@@ -350,14 +377,47 @@ async def user_create_update(body, spec, meta, status, patch, **kwargs):
 
 
 @kopf.on.delete("identity.karectl.io", "v1alpha1", "user")
-def user_delete(body, spec, meta, **kwargs):
+async def user_delete(body, spec, meta, **kwargs):
     """ Operator function for deleting users.
 
+        Removes the user from any Gitea teams derived from their group membership.
         PVCs are cleaned up when Project is deleted (namespace cascading deletion)
     """
     username = spec["username"]
+    user_groups = spec.get("groups", [])
 
     delete_keycloak_user(username)
+
+    # Revoke Gitea team membership across the user's groups
+    if is_gitea_enabled() and user_groups:
+        gitea_teams_left = []
+        for group_name in user_groups:
+            group_cr = get_group_crd(group_name)
+            if not group_cr:
+                logger.warning(f"Group CRD {group_name} not found, skipping Gitea team revocation")
+                continue
+            group_gitea_config = group_cr.get("spec", {}).get("gitea", {}) or {}
+            team_name = group_gitea_config.get("team_name") or group_name
+            group_projects = group_cr.get("spec", {}).get("projects", [])
+
+            for project_name in group_projects:
+                org_name = f"project-{project_name}"
+                try:
+                    team_id = await gitea_get_team_id(org_name, team_name)
+                    if team_id:
+                        removed = await gitea_remove_user_from_team(team_id, username)
+                        if removed:
+                            gitea_teams_left.append(f"{org_name}/{team_name}")
+                            logger.info(f"Removed {username} from Gitea team {org_name}/{team_name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove {username} from Gitea team {org_name}/{team_name}: {e}")
+
+        if gitea_teams_left:
+            kopf.info(
+                meta,
+                reason="GiteaTeamsLeft",
+                message=f"User {username} removed from Gitea teams: {', '.join(gitea_teams_left)}",
+            )
 
     # Update which PVCs will be retained
     projects = get_user_projects(username)
@@ -469,7 +529,7 @@ async def group_create_update(body, spec, meta, patch, **kwargs):
                         except Exception as e:
                             logger.warning(f"Could not add {member} to Gitea team: {e}")
 
-                gitea_teams_created.append(f"{org_name}/{team_name}")
+                    gitea_teams_created.append(f"{org_name}/{team_name}")
             except Exception as e:
                 logger.error(f"Failed to create Gitea team in {org_name}: {e}")
                 gitea_errors.append(f"{org_name}: {str(e)}")
@@ -494,10 +554,44 @@ async def group_create_update(body, spec, meta, patch, **kwargs):
 
 
 @kopf.on.delete("identity.karectl.io", "v1alpha1", "group")
-def group_delete(body, spec, meta, **kwargs):
-    """Operator function for deleting groups."""
+async def group_delete(body, spec, meta, **kwargs):
+    """ Operator function for deleting groups.
+
+        Revokes all members from the Gitea teams provisioned for this group's projects.
+    """
     groupname = meta["name"]
+    projects = spec.get("projects", [])
+
     delete_keycloak_group(groupname)
+
+    # Revoke Gitea team membership for all group members across the group's projects
+    if is_gitea_enabled() and projects:
+        gitea_config = spec.get("gitea", {}) or {}
+        team_name = gitea_config.get("team_name") or groupname
+        members = get_group_members(groupname)
+        gitea_teams_revoked = []
+
+        for project_name in projects:
+            org_name = f"project-{project_name}"
+            try:
+                team_id = await gitea_get_team_id(org_name, team_name)
+                if team_id and members:
+                    for member in members:
+                        try:
+                            await gitea_remove_user_from_team(team_id, member)
+                        except Exception as e:
+                            logger.warning(f"Could not remove {member} from Gitea team {org_name}/{team_name}: {e}")
+                    gitea_teams_revoked.append(f"{org_name}/{team_name}")
+            except Exception as e:
+                logger.warning(f"Could not revoke Gitea team membership in {org_name}/{team_name}: {e}")
+
+        if gitea_teams_revoked:
+            kopf.info(
+                meta,
+                reason="GiteaTeamMembersRevoked",
+                message=f"Revoked members from Gitea teams: {', '.join(gitea_teams_revoked)}",
+            )
+
     kopf.info(meta, reason="GroupDeleted", message=f"Group {groupname} deleted.")
 
 
