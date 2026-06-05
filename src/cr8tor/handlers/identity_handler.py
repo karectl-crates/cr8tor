@@ -492,7 +492,12 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     # CiliumNetworkPolicy in the project namespace
     try:
         ns_name = get_proj_namespace(project_name)
-        policy_result = create_project_network_policy(project_name, namespace=ns_name)
+        approved_egress_rules = spec.get("approved_egress_rules") or []
+        policy_result = create_project_network_policy(
+            project_name,
+            namespace=ns_name,
+            approved_egress_rules=approved_egress_rules
+        )
         kopf.info(
             meta,
             reason="NetworkPolicyCreated",
