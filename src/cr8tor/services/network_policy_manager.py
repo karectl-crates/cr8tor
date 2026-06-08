@@ -66,9 +66,10 @@ spec:
       toPorts:
         - ports:
             - port: "53"
-              protocol: UDP
-            - port: "53"
-              protocol: TCP
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
     # Allow to jupyterhub namespace (hub callbacks, proxy)
     - toEndpoints:
         - matchLabels:
@@ -106,6 +107,19 @@ def create_project_network_policy(project_name, namespace, approved_egress_rules
         namespace=namespace,
     )
     policy_body = yaml.safe_load(policy_yaml)
+
+    if approved_egress_rules:
+        # Restrict DNS proxy to cluster-internal names and approved FQDNs only.
+        dns_matches = [
+            {"matchPattern": "*.cluster.local"},
+            {"matchPattern": "*.internal"},
+        ]
+        dns_matches.extend({"matchName": rule["fqdn"]} for rule in approved_egress_rules)
+        for egress_rule in policy_body["spec"]["egress"]:
+            for ep in egress_rule.get("toEndpoints", []):
+                if ep.get("matchLabels", {}).get("k8s-app") == "kube-dns":
+                    egress_rule["toPorts"][0]["rules"]["dns"] = dns_matches
+                    break
 
     for rule in (approved_egress_rules or []):
         ports = rule.get("ports") or [443]
