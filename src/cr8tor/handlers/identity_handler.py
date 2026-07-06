@@ -243,12 +243,9 @@ def user_create_update(body, spec, meta, status, patch, diff, **kwargs):
     username = spec["username"]
     ensure_realm_exists()
 
-    # Force a new temporary password when the spec password field is explicitly added or changed.
-    password_changed = any(
-        field == ("spec", "password") and op in ("add", "change")
-        for op, field, _, _ in (diff or [])
-    )
-    result = sync_keycloak_user(username, spec, force_password_reset=password_changed)
+    # The password is set once, when the keycloak user is first created
+    # an existing user's password is never overwritten
+    result = sync_keycloak_user(username, spec)
 
     if result and "password" in result:
         patch.status["initialPassword"] = result["password"]
