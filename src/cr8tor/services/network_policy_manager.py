@@ -70,9 +70,10 @@ spec:
       toPorts:
         - ports:
             - port: "53"
-              protocol: UDP
-            - port: "53"
-              protocol: TCP
+              protocol: ANY
+          rules:
+            dns:
+              - matchPattern: "*"
     # Allow to jupyterhub namespace (hub callbacks, proxy)
     - toEndpoints:
         - matchLabels:
@@ -100,12 +101,13 @@ spec:
 """
 
 
-def create_project_network_policy(project_name, namespace):
+def create_project_network_policy(project_name, namespace, approved_egress_rules=None):
     """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
         project_name: Name of the project
         namespace: Project namespace
+        approved_egress_rules: Optional list with fqdn and optional ports
 
     Returns:
         dict with status of the operation
@@ -117,6 +119,26 @@ def create_project_network_policy(project_name, namespace):
         namespace=namespace,
     )
     policy_body = yaml.safe_load(policy_yaml)
+
+    if approved_egress_rules:
+        # Restrict DNS proxy to cluster-internal names and approved FQDNs only.
+        dns_matches = [
+            {"matchPattern": "*.cluster.local"},
+            {"matchPattern": "*.internal"},
+        ]
+        dns_matches.extend({"matchName": rule["fqdn"]} for rule in approved_egress_rules)
+        for egress_rule in policy_body["spec"]["egress"]:
+            for ep in egress_rule.get("toEndpoints", []):
+                if ep.get("matchLabels", {}).get("k8s-app") == "kube-dns":
+                    egress_rule["toPorts"][0]["rules"]["dns"] = dns_matches
+                    break
+
+    for rule in (approved_egress_rules or []):
+        ports = rule.get("ports") or [443]
+        policy_body["spec"]["egress"].append({
+            "toFQDNs": [{"matchName": rule["fqdn"]}],
+            "toPorts": [{"ports": [{"port": str(port), "protocol": "TCP"} for port in ports]}],
+        })
 
     try:
         existing = api.get_namespaced_custom_object(

@@ -271,7 +271,7 @@ def cleanup_user_notebook_pvcs(username, projects):
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.resume("identity.karectl.io", "v1alpha1", "user")
-async def user_create_update(body, spec, meta, status, patch, **kwargs):
+async def user_create_update(body, spec, meta, status, patch, diff, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
         Add user to Gitea teams based on group membership.
@@ -280,7 +280,13 @@ async def user_create_update(body, spec, meta, status, patch, **kwargs):
     user_groups = spec.get("groups", [])
 
     ensure_realm_exists()
-    result = sync_keycloak_user(username, spec)
+
+    # Force a new temporary password when the spec password field is explicitly added or changed.
+    password_changed = any(
+        field == ("spec", "password") and op in ("add", "change")
+        for op, field, _, _ in (diff or [])
+    )
+    result = sync_keycloak_user(username, spec, force_password_reset=password_changed)
 
     if result and "password" in result:
         patch.status["initialPassword"] = result["password"]
@@ -695,7 +701,12 @@ async def project_create_update(body, spec, meta, patch, **kwargs):
     # CiliumNetworkPolicy in the project namespace
     try:
         ns_name = get_proj_namespace(project_name)
-        policy_result = create_project_network_policy(project_name, namespace=ns_name)
+        approved_egress_rules = spec.get("approved_egress_rules") or []
+        policy_result = create_project_network_policy(
+            project_name,
+            namespace=ns_name,
+            approved_egress_rules=approved_egress_rules
+        )
         kopf.info(
             meta,
             reason="NetworkPolicyCreated",
