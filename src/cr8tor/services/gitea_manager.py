@@ -132,6 +132,102 @@ async def get_team_id(org_name, team_name):
         raise
 
 
+async def ensure_user(username, email, full_name="", source_id=None):
+    """ Create a Gitea user backed by an external auth source if not exists.
+
+    Pre-provisioning the account means team assignment no longer has to wait for the user's
+    first OIDC login. The account is bound to `source_id` (the Keycloak auth source) so
+    authentication still goes through SSO and no local password is set.
+
+    Args:
+        username: Gitea username, matching the Keycloak username
+        email: User email address
+        full_name: Display name
+        source_id: Gitea auth source id. When None the user is not created.
+
+    Returns:
+        dict with `created`, `user` and, when nothing was done, `skipped`/`reason`.
+    """
+    client = get_gitea_client()
+
+    # Check for existence first: an account that already exists needs no auth source
+    try:
+        user = await client.get(f"/api/v1/users/{username}")
+        logger.info(f"Gitea user '{username}' already exists")
+        return {"created": False, "user": user}
+    except HTTPStatusError as e:
+        if e.response.status_code != 404:
+            raise
+
+    if source_id is None:
+        logger.warning(
+            f"No Gitea OIDC auth source configured; not pre-provisioning user '{username}'. "
+            "The account will be created by Gitea on first SSO login instead."
+        )
+        return {"created": False, "user": None, "skipped": True, "reason": "no-oidc-source-id"}
+
+    payload = {
+        "username": username,
+        "email": email,
+        "login_name": username,
+        "source_id": source_id,
+        "must_change_password": False,
+    }
+    if full_name:
+        payload["full_name"] = full_name
+
+    try:
+        user = await client.post("/api/v1/admin/users", payload)
+        logger.info(f"Pre-provisioned Gitea user '{username}' against auth source {source_id}")
+        return {"created": True, "user": user}
+    except HTTPStatusError as e:
+        if e.response.status_code == 422:
+            # Raced with another writer, or the username/email is already taken
+            logger.info(f"Gitea user '{username}' already exists")
+            return {"created": False, "user": None}
+        raise
+
+
+async def get_team_members(team_id, page_size=50):
+    """ List the usernames of a team's members.
+
+    Args:
+        team_id: Gitea team id
+        page_size: Results per API page
+
+    Returns:
+        List of usernames.
+    """
+    client = get_gitea_client()
+    logins = []
+    page = 1
+
+    while True:
+        try:
+            batch = await client.get(
+                f"/api/v1/teams/{team_id}/members?page={page}&limit={page_size}"
+            )
+        except HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return logins
+            raise
+
+        if not batch:
+            break
+
+        logins.extend(
+            login for login in
+            (member.get("login") or member.get("username") for member in batch)
+            if login
+        )
+
+        if len(batch) < page_size:
+            break
+        page += 1
+
+    return logins
+
+
 async def add_user_to_team(team_id, username):
     """ Add user to team.
     """

@@ -2,6 +2,7 @@
 
 import os
 import logging
+from urllib.parse import urlparse
 
 import httpx
 
@@ -25,6 +26,67 @@ def get_gitea_token():
     """ Get Gitea admin API token.
     """
     return os.environ.get("GITEA_ADMIN_TOKEN")
+
+
+def get_gitea_oidc_source_id():
+    """ Get the id of the Gitea auth source backing Keycloak OIDC logins.
+
+    Accounts are pre-provisioned against this auth source so that login still goes through
+    SSO. Returns None when unset or not an integer, in which case pre-provisioning is
+    skipped rather than falling back to a local-password account.
+    """
+    raw = (os.environ.get("GITEA_OIDC_SOURCE_ID") or "").strip()
+    if not raw:
+        return None
+
+    try:
+        return int(raw)
+    except ValueError:
+        logger.warning(
+            f"GITEA_OIDC_SOURCE_ID is not an integer ({raw!r}); skipping Gitea pre-provisioning"
+        )
+        return None
+
+
+def get_gitea_network_target():
+    """ Resolve how project namespaces reach Gitea, for network policy generation.
+
+    An in-cluster Gitea is reached through a namespace selector; an external or
+    ingress-fronted Gitea has to be reached by FQDN. Both the location and the ports are
+    derived from GITEA_URL so that a Gitea behind ingress on 443 is not blocked, and both
+    can be overridden with GITEA_NAMESPACE and GITEA_PORTS.
+
+    Returns:
+        dict with `mode` ("cluster" or "fqdn"), `namespace`, `fqdn` and `ports`.
+    """
+    parsed = urlparse(get_gitea_url())
+    hostname = parsed.hostname or ""
+    default_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    raw_ports = (os.environ.get("GITEA_PORTS") or "").strip()
+    ports = []
+    for chunk in raw_ports.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        try:
+            ports.append(int(chunk))
+        except ValueError:
+            logger.warning(f"Ignoring non-integer port in GITEA_PORTS: {chunk!r}")
+    if not ports:
+        ports = [default_port]
+
+    namespace = (os.environ.get("GITEA_NAMESPACE") or "").strip()
+    if not namespace and hostname.endswith((".svc", ".svc.cluster.local")):
+        # e.g. gitea-http.gitea.svc.cluster.local -> gitea
+        parts = hostname.split(".")
+        if len(parts) >= 2:
+            namespace = parts[1]
+
+    if namespace:
+        return {"mode": "cluster", "namespace": namespace, "fqdn": None, "ports": ports}
+
+    return {"mode": "fqdn", "namespace": None, "fqdn": hostname, "ports": ports}
 
 
 def is_gitea_enabled():
