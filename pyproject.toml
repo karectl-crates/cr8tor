@@ -8,7 +8,7 @@ requires-python = ">=3.12"
 dependencies = [
     "bagit>=1.8.1",
     "cookiecutter>=2.6.0",
-    "cr8tor-metamodel @ git+https://github.com/karectl-crates/cr8tor-metamodel.git@main",
+    "cr8tor-metamodel",
     "pydantic>=2.10.4",
     "rocrate>=0.13.0",
     "tomlkit>=0.13.2",
@@ -24,6 +24,7 @@ dependencies = [
     "jinja2>=3.1.5",
     "pyyaml>=6.0.2",
     "requests>=2.32.3",
+    "httpx>=0.27.0",
     "python-keycloak>=5.8.1",
     "setuptools>=75.0.0",
     "jsonschema>=4.23.0",
@@ -58,7 +59,9 @@ dev = [
 # Git source for CI/Docker. For local dev, override with:
 #   uv pip install -e ../cr8tor-metamodel
 # TODO: Remove this section entirely when cr8tor-metamodel is published to PyPI.
-# cr8tor-metamodel = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git" }
+# TODO: Repoint at `branch = "main"` once feature/ss-gitea-model is merged.
+# Pinned to the Gitea model branch until the schema change lands on main.
+cr8tor-metamodel = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git", branch = "feature/ss-gitea-model" }
 
 [tool.uv.workspace]
 members = ["cr8tor"]

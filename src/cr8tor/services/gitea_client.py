@@ -1,4 +1,4 @@
-""" Gitea api client for cr8tor operator."""
+""" Gitea API client for cr8tor operator."""
 
 import os
 import logging
@@ -9,7 +9,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-def get_verify_tls():
+def get_gitea_verify_tls():
     """ Get TLS verification from environment.
     """
     verify_tls = os.environ.get("GITEA_VERIFY_TLS", "true").lower()
@@ -102,7 +102,7 @@ class GiteaClient:
     def __init__(self):
         self.base_url = get_gitea_url().rstrip("/")
         self.token = get_gitea_token()
-        self.verify_tls = get_verify_tls()
+        self.verify_tls = get_gitea_verify_tls()
 
         if not self.token:
             raise ValueError("GITEA_ADMIN_TOKEN environment variable is required")

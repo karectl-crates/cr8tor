@@ -5,12 +5,12 @@ import logging
 
 from httpx import HTTPStatusError
 
-from .client import get_gitea_client
+from .gitea_client import get_gitea_client
 
 logger = logging.getLogger(__name__)
 
 
-async def ensure_organisation(
+async def gitea_ensure_organisation(
     org_name, description="", visibility="private"
     ):
     """ Create Gitea organisation if not exists.
@@ -49,7 +49,7 @@ async def ensure_organisation(
         raise
 
 
-async def delete_organisation(org_name):
+async def gitea_delete_organisation(org_name):
     """ Delete Gitea organisation.
     """
     client = get_gitea_client()
@@ -66,7 +66,7 @@ async def delete_organisation(org_name):
         raise
 
 
-async def ensure_team(org_name, team_name, permission="write"):
+async def gitea_ensure_team(org_name, team_name, permission="write"):
     """ Create team in organisation if not exists.
 
     Args:
@@ -77,7 +77,7 @@ async def ensure_team(org_name, team_name, permission="write"):
     client = get_gitea_client()
 
     # Check for existence
-    existing_team_id = await get_team_id(org_name, team_name)
+    existing_team_id = await gitea_get_team_id(org_name, team_name)
     if existing_team_id:
         logger.info(f"Gitea team '{team_name}' already exists in org '{org_name}'")
         return {"team_id": existing_team_id, "created": False}
@@ -110,12 +110,12 @@ async def ensure_team(org_name, team_name, permission="write"):
         if e.response.status_code == 422:
             # Team might already exist
             logger.warning(f"Could not create Gitea team '{team_name}': {e}")
-            team_id = await get_team_id(org_name, team_name)
+            team_id = await gitea_get_team_id(org_name, team_name)
             return {"team_id": team_id, "created": False, "error": str(e)}
         raise
 
 
-async def get_team_id(org_name, team_name):
+async def gitea_get_team_id(org_name, team_name):
     """ Get team ID by name.
     """
     client = get_gitea_client()
@@ -132,7 +132,7 @@ async def get_team_id(org_name, team_name):
         raise
 
 
-async def ensure_user(username, email, full_name="", source_id=None):
+async def gitea_ensure_user(username, email, full_name="", source_id=None):
     """ Create a Gitea user backed by an external auth source if not exists.
 
     Pre-provisioning the account means team assignment no longer has to wait for the user's
@@ -188,7 +188,7 @@ async def ensure_user(username, email, full_name="", source_id=None):
         raise
 
 
-async def get_team_members(team_id, page_size=50):
+async def gitea_get_team_members(team_id, page_size=50):
     """ List the usernames of a team's members.
 
     Args:
@@ -228,7 +228,7 @@ async def get_team_members(team_id, page_size=50):
     return logins
 
 
-async def add_user_to_team(team_id, username):
+async def gitea_add_user_to_team(team_id, username):
     """ Add user to team.
     """
     client = get_gitea_client()
@@ -250,7 +250,7 @@ async def add_user_to_team(team_id, username):
         raise
 
 
-async def remove_user_from_team(team_id, username):
+async def gitea_remove_user_from_team(team_id, username):
     """ Remove user from team.
     """
     client = get_gitea_client()
@@ -266,7 +266,7 @@ async def remove_user_from_team(team_id, username):
         raise
 
 
-async def ensure_repository(
+async def gitea_ensure_repository(
     org_name,
     repo_name,
     description = "",

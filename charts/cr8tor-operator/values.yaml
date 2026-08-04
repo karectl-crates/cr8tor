@@ -111,3 +111,10 @@ gitea:
   enabled: false
   # Secret for gitea admin API token
   adminSecretName: "gitea-api-credentials"
+  # How long the init container waits for the admin token secret before failing. The pod
+  # then restarts with backoff rather than waiting forever on a secret that may never appear.
+  secretWaitTimeoutSeconds: 300
+  # Id of the Gitea auth source backing Keycloak OIDC logins. Required to pre-provision
+  # user accounts before their first SSO login; when empty, pre-provisioning is skipped
+  # and Gitea creates the account on first login instead.
+  oidcSourceId: ""

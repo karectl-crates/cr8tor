@@ -38,8 +38,13 @@ spec:
             - /bin/sh
             - -c
             - |
-              echo "Waiting for api-credentials secret..."
+              echo "Waiting for api-credentials secret (timeout {{ .Values.gitea.secretWaitTimeoutSeconds }}s)..."
+              deadline=$(( $(date +%s) + {{ .Values.gitea.secretWaitTimeoutSeconds }} ))
               until kubectl get secret {{ .Values.gitea.adminSecretName }} -n {{ .Release.Namespace }} >/dev/null 2>&1; do
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "Timed out waiting for secret {{ .Values.gitea.adminSecretName }}" >&2
+                  exit 1
+                fi
                 echo "  Secret not found, waiting..."
                 sleep 5
               done
@@ -161,6 +166,10 @@ spec:
                   name: {{ .Values.gitea.adminSecretName }}
                   key: api-token
                   optional: true
+            {{- if .Values.gitea.oidcSourceId }}
+            - name: GITEA_OIDC_SOURCE_ID
+              value: {{ .Values.gitea.oidcSourceId | quote }}
+            {{- end }}
             {{- end }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:

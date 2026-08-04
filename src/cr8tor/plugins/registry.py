@@ -56,7 +56,6 @@ class PluginRegistry:
         builtin_plugins = [
             "cr8tor.plugins.identity",
             "cr8tor.plugins.workspaces",
-            "cr8tor.plugins.project_sync",
         ]
 
         loaded_count = 0
