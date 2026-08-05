@@ -89,13 +89,14 @@ spec:
 """
 
 
-def create_project_network_policy(project_name, namespace, approved_egress_rules=None):
+def create_project_network_policy(project_name, namespace, approved_egress_rules=None, gitea_enabled=False):
     """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
         project_name: Name of the project
         namespace: Project namespace
         approved_egress_rules: Optional list with fqdn and optional ports
+        gitea_enabled: Whether the project has the gitea resource enabled
 
     Returns:
         dict with status of the operation
@@ -126,6 +127,17 @@ def create_project_network_policy(project_name, namespace, approved_egress_rules
         policy_body["spec"]["egress"].append({
             "toFQDNs": [{"matchName": rule["fqdn"]}],
             "toPorts": [{"ports": [{"port": str(port), "protocol": "TCP"} for port in ports]}],
+        })
+
+    if gitea_enabled:
+        policy_body["spec"]["egress"].append({
+            "toEndpoints": [{
+                "matchLabels": {
+                    "app.kubernetes.io/name": "gitea",
+                    "k8s:io.kubernetes.pod.namespace": "gitea",
+                }
+            }],
+            "toPorts": [{"ports": [{"port": "3000", "protocol": "TCP"}]}],
         })
 
     try:

@@ -493,10 +493,14 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     try:
         ns_name = get_proj_namespace(project_name)
         approved_egress_rules = spec.get("approved_egress_rules") or []
+        gitea_enabled = any(
+            r.get("name") == "gitea" and r.get("enabled") for r in resources
+        )
         policy_result = create_project_network_policy(
             project_name,
             namespace=ns_name,
-            approved_egress_rules=approved_egress_rules
+            approved_egress_rules=approved_egress_rules,
+            gitea_enabled=gitea_enabled,
         )
         kopf.info(
             meta,
