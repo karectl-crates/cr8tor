@@ -112,7 +112,12 @@ def _apply_gitea_rules(policy_body, gitea_enabled):
     ]
 
     if target["mode"] == "cluster":
-        selector = [{"matchLabels": {"k8s:io.kubernetes.pod.namespace": target["namespace"]}}]
+        selector = [{
+            "matchLabels": {
+                "app.kubernetes.io/name": "gitea",
+                "k8s:io.kubernetes.pod.namespace": target["namespace"],
+            }
+        }]
         policy_body["spec"]["ingress"].append({"fromEndpoints": selector})
         policy_body["spec"]["egress"].append(
             {"toEndpoints": selector, "toPorts": to_ports}
