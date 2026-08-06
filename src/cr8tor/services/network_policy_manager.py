@@ -123,6 +123,15 @@ def _apply_gitea_rules(policy_body, gitea_enabled):
         policy_body["spec"]["egress"].append(
             {"toFQDNs": [{"matchName": target["fqdn"]}], "toPorts": to_ports}
         )
+        policy_body["spec"]["egress"].append({
+            "toEndpoints": [{
+                "matchLabels": {
+                    "app.kubernetes.io/name": "gitea",
+                    "k8s:io.kubernetes.pod.namespace": "gitea",
+                }
+            }],
+            "toPorts": [{"ports": [{"port": "3000", "protocol": "TCP"}]}],
+        })
         return target["fqdn"]
 
     logger.warning("Gitea is enabled but GITEA_URL has no resolvable host; no egress rule added")
