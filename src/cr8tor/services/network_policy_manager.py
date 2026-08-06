@@ -91,7 +91,7 @@ spec:
 """
 
 
-def _apply_gitea_rules(policy_body):
+def _apply_gitea_rules(policy_body, gitea_enabled):
     """ Add Gitea ingress/egress rules to a policy body, if Gitea is enabled.
 
     Supports both an in-cluster Gitea (namespace selector) and an external or
@@ -103,7 +103,7 @@ def _apply_gitea_rules(policy_body):
     Returns:
         The Gitea FQDN when reached externally, otherwise None.
     """
-    if not is_gitea_enabled():
+    if not (is_gitea_enabled() and gitea_enabled):
         return None
 
     target = get_gitea_network_target()
@@ -129,7 +129,7 @@ def _apply_gitea_rules(policy_body):
     return None
 
 
-def create_project_network_policy(project_name, namespace, approved_egress_rules=None):
+def create_project_network_policy(project_name, namespace, approved_egress_rules=None, gitea_enabled=False):
     """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
@@ -148,7 +148,7 @@ def create_project_network_policy(project_name, namespace, approved_egress_rules
     )
     policy_body = yaml.safe_load(policy_yaml)
 
-    gitea_fqdn = _apply_gitea_rules(policy_body)
+    gitea_fqdn = _apply_gitea_rules(policy_body, gitea_enabled)
 
     if approved_egress_rules:
         # Restrict DNS proxy to cluster-internal names and approved FQDNs only.
