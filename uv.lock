@@ -494,7 +494,7 @@ dev = [
 requires-dist = [
     { name = "bagit", specifier = ">=1.8.1" },
     { name = "cookiecutter", specifier = ">=2.6.0" },
-    { name = "cr8tor-metamodel", git = "https://github.com/karectl-crates/cr8tor-metamodel.git?branch=feature%2Fss-gitea-model" },
+    { name = "cr8tor-metamodel", git = "https://github.com/karectl-crates/cr8tor-metamodel.git?rev=main" },
     { name = "debugpy", specifier = ">=1.5.1" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "gitpython", specifier = ">=3.1.24" },
@@ -534,8 +534,8 @@ dev = [
 
 [[package]]
 name = "cr8tor-metamodel"
-version = "0.0.0.post30.dev0+d5c95a3"
-source = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git?branch=feature%2Fss-gitea-model#d5c95a348ec6bac09aa1cb187ddea7b897ac3fba" }
+version = "0.0.0.post28.dev0+7e98ba0"
+source = { git = "https://github.com/karectl-crates/cr8tor-metamodel.git?rev=main#7e98ba0b78a3a3f2474319fcbb7eb52cd20644c0" }
 dependencies = [
     { name = "linkml-runtime" },
 ]
