@@ -118,7 +118,7 @@ def _apply_gitea_rules(policy_body, gitea_enabled):
                 "k8s:io.kubernetes.pod.namespace": target["namespace"],
             }
         }]
-        policy_body["spec"]["ingress"].append({"fromEndpoints": selector})
+        policy_body["spec"]["ingress"].append({"fromEndpoints": selector, "toPorts": to_ports})
         policy_body["spec"]["egress"].append(
             {"toEndpoints": selector, "toPorts": to_ports}
         )
