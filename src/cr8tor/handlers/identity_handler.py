@@ -1,5 +1,12 @@
-"""Module that provides the identity handler for the operator."""
+"""Module that provides the identity handler for the operator.
 
+The Keycloak and Kubernetes service calls used here are synchronous and blocking. Inside an
+async kopf handler they are dispatched with asyncio.to_thread() so they do not stall the
+operator's event loop. The Gitea manager functions are already async over httpx and are
+awaited directly.
+"""
+
+import asyncio
 import logging
 import os
 
@@ -28,6 +35,21 @@ from cr8tor.services.storage_manager import (
     get_pvc_name,
     get_project_uid,
     resolve_notebook_storage_config,
+    resolve_project_storage_config,
+    ensure_project_pvc,
+)
+from cr8tor.services.resource_utils import get_resource_entry
+from cr8tor.services.gitea_client import is_gitea_enabled, get_gitea_oidc_source_id
+from cr8tor.services.gitea_manager import (
+    gitea_ensure_organisation,
+    gitea_delete_organisation,
+    gitea_ensure_team,
+    gitea_get_team_id,
+    gitea_get_team_members,
+    gitea_ensure_user,
+    gitea_add_user_to_team,
+    gitea_remove_user_from_team,
+    gitea_ensure_repository,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,8 +81,8 @@ def get_user_projects(username):
     Args:
         username: The username to look up across all Group CRD members lists.
     """
-    api = kubernetes.client.CustomObjectsApi()
     projects = set()
+    api = kubernetes.client.CustomObjectsApi()
 
     try:
         all_groups = api.list_namespaced_custom_object(
@@ -80,6 +102,85 @@ def get_user_projects(username):
         logger.error(f"Failed to list groups for project resolution of {username}: {e}")
 
     return projects
+
+
+def get_group_crd(group_name):
+    """Fetch a Group CRD by name.
+
+    Args:
+        group_name: Name of the group (CRD resource name)
+
+    Returns:
+        The Group CRD dict, or None if not found.
+    """
+    api = kubernetes.client.CustomObjectsApi()
+    try:
+        return api.get_namespaced_custom_object(
+            group="identity.karectl.io",
+            version="v1alpha1",
+            namespace=IDENTITY_NAMESPACE,
+            plural="groups",
+            name=group_name,
+        )
+    except ApiException as e:
+        if e.status == 404:
+            return None
+        logger.error(f"Failed to get group CRD {group_name}: {e}")
+        return None
+
+
+def get_user_group_crds(username):
+    """Resolve the Group CRDs that list this user as a member.
+
+    Group.spec.members is the authoritative user-to-group linkage. The User CRD's own
+    spec.groups is not populated by `cr8tor create-deployment` (project binding is managed
+    entirely via Group CRDs), so it cannot be used to derive group membership.
+
+    Args:
+        username: The username to look up across all Group CRD members lists.
+
+    Returns:
+        List of Group CRD dicts the user belongs to.
+    """
+    api = kubernetes.client.CustomObjectsApi()
+    groups = []
+
+    try:
+        all_groups = api.list_namespaced_custom_object(
+            group="identity.karectl.io",
+            version="v1alpha1",
+            namespace=IDENTITY_NAMESPACE,
+            plural="groups",
+        )
+        for group_cr in all_groups.get("items", []):
+            members = group_cr.get("spec", {}).get("members", []) or []
+            if username in members:
+                groups.append(group_cr)
+    except ApiException as e:
+        logger.error(f"Failed to list groups for membership resolution of {username}: {e}")
+
+    return groups
+
+
+def get_gitea_team_targets(group_cr):
+    """Resolve the Gitea teams a Group CRD maps to, one per project organisation.
+
+    Args:
+        group_cr: Group CRD dict
+
+    Returns:
+        List of (org_name, team_name, permission) tuples.
+    """
+    spec = group_cr.get("spec", {}) or {}
+    group_name = group_cr.get("metadata", {}).get("name", "")
+    gitea_config = spec.get("gitea") or {}
+    team_name = gitea_config.get("team_name") or group_name
+    permission = gitea_config.get("permission", "write")
+
+    return [
+        (f"project-{project_name}", team_name, permission)
+        for project_name in (spec.get("projects") or [])
+    ]
 
 
 def get_group_members(group_name):
@@ -234,13 +335,23 @@ def cleanup_user_notebook_pvcs(username, projects):
 @kopf.on.create("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "user")
 @kopf.on.resume("identity.karectl.io", "v1alpha1", "user")
-def user_create_update(body, spec, meta, status, patch, **kwargs):
+async def user_create_update(body, spec, meta, status, patch, diff, **kwargs):
     """ Operator function for creating and updating users.
         Provision notebook PVCs for the projects the user has access to.
+        Add user to Gitea teams based on group membership.
     """
     username = spec["username"]
-    ensure_realm_exists()
-    result = sync_keycloak_user(username, spec)
+
+    await asyncio.to_thread(ensure_realm_exists)
+
+    # Force a new temporary password when the spec password field is explicitly added or changed.
+    password_changed = any(
+        field == ("spec", "password") and op in ("add", "change")
+        for op, field, _, _ in (diff or [])
+    )
+    result = await asyncio.to_thread(
+        sync_keycloak_user, username, spec, force_password_reset=password_changed
+    )
 
     if result and "password" in result:
         patch.status["initialPassword"] = result["password"]
@@ -251,11 +362,13 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
     # meta["uid"] is the User CRD's UID used to uniquely identify
     # the user across project group membership changes.
     user_uid = meta["uid"]
-    projects = get_user_projects(username)
+    projects = await asyncio.to_thread(get_user_projects, username)
 
     if projects:
         logger.info(f"Provisioning notebook storage for {username} in {len(projects)} projects: {projects}")
-        pvc_results = ensure_user_notebook_pvc(username, projects, user_uid)
+        pvc_results = await asyncio.to_thread(
+            ensure_user_notebook_pvc, username, projects, user_uid
+        )
 
         # Track storage and status
         provisioned = [pvc for pvc, reason in pvc_results.items() if reason.get("status") in ("created", "exists")]
@@ -283,19 +396,114 @@ def user_create_update(body, spec, meta, status, patch, **kwargs):
     else:
         logger.info(f"No project group memberships found for {username}, skipping storage provisioning")
 
+    # Pre-provision the Gitea account against the Keycloak auth source, then join the teams
+    # this user's groups map to. Creating the account eagerly removes the dependency on the
+    # user having logged in via SSO first, so a Project -> Group -> User apply order is
+    # self-sufficient. Group.spec.members remains the authoritative linkage; this only
+    # covers users created after their group, which the Group handler will not revisit.
+    if is_gitea_enabled():
+        try:
+            user_result = await gitea_ensure_user(
+                username=username,
+                email=spec.get("email", ""),
+                full_name=" ".join(
+                    part for part in (spec.get("given_name"), spec.get("family_name")) if part
+                ),
+                source_id=get_gitea_oidc_source_id(),
+            )
+            if user_result.get("created"):
+                kopf.info(
+                    meta,
+                    reason="GiteaUserCreated",
+                    message=f"Pre-provisioned Gitea account for {username}",
+                )
+            elif user_result.get("skipped"):
+                kopf.warn(
+                    meta,
+                    reason="GiteaUserSkipped",
+                    message=(
+                        f"Gitea pre-provisioning skipped for {username}: "
+                        "gitea.oidcSourceId is not configured"
+                    ),
+                )
+        except Exception as e:
+            logger.warning(f"Could not pre-provision Gitea user {username}: {e}")
+            kopf.warn(
+                meta,
+                reason="GiteaUserFailed",
+                message=f"Failed to pre-provision Gitea account for {username}: {e}",
+            )
+
+        gitea_teams_joined = []
+        for group_cr in await asyncio.to_thread(get_user_group_crds, username):
+            for org_name, team_name, permission in get_gitea_team_targets(group_cr):
+                try:
+                    team_result = await gitea_ensure_team(org_name, team_name, permission)
+                    team_id = team_result.get("team_id")
+                    if not team_id:
+                        continue
+
+                    # Skip users already on the team so that reconciles of an existing User
+                    # are a no-op rather than a repeated write and a repeated event. A failed
+                    # read falls through to the add, which is idempotent server-side.
+                    try:
+                        already_member = username in await gitea_get_team_members(team_id)
+                    except Exception as e:
+                        logger.warning(f"Could not list members of Gitea team {org_name}/{team_name}: {e}")
+                        already_member = False
+
+                    if already_member:
+                        continue
+
+                    if await gitea_add_user_to_team(team_id, username):
+                        gitea_teams_joined.append(f"{org_name}/{team_name}")
+                except Exception as e:
+                    logger.warning(f"Could not add {username} to Gitea team {org_name}/{team_name}: {e}")
+
+        if gitea_teams_joined:
+            patch.status["giteaMembership"] = {"teams": gitea_teams_joined}
+            kopf.info(
+                meta,
+                reason="GiteaTeamsJoined",
+                message=f"User {username} added to Gitea teams: {', '.join(gitea_teams_joined)}",
+            )
+
 
 @kopf.on.delete("identity.karectl.io", "v1alpha1", "user")
-def user_delete(body, spec, meta, **kwargs):
+async def user_delete(body, spec, meta, **kwargs):
     """ Operator function for deleting users.
 
+        Removes the user from any Gitea teams derived from their group membership.
         PVCs are cleaned up when Project is deleted (namespace cascading deletion)
     """
     username = spec["username"]
 
-    delete_keycloak_user(username)
+    await asyncio.to_thread(delete_keycloak_user, username)
+
+    # Revoke Gitea team membership across every group that lists this user as a member
+    if is_gitea_enabled():
+        gitea_teams_left = []
+        for group_cr in await asyncio.to_thread(get_user_group_crds, username):
+            for org_name, team_name, _permission in get_gitea_team_targets(group_cr):
+                try:
+                    team_id = await gitea_get_team_id(org_name, team_name)
+                    if team_id:
+                        removed = await gitea_remove_user_from_team(team_id, username)
+                        if removed:
+                            gitea_teams_left.append(f"{org_name}/{team_name}")
+                            logger.info(f"Removed {username} from Gitea team {org_name}/{team_name}")
+                except Exception as e:
+                    logger.warning(f"Could not remove {username} from Gitea team {org_name}/{team_name}: {e}")
+
+        if gitea_teams_left:
+            kopf.info(
+                meta,
+                reason="GiteaTeamsLeft",
+                message=f"User {username} removed from Gitea teams: {', '.join(gitea_teams_left)}",
+            )
 
     # Update which PVCs will be retained
-    projects = get_user_projects(username)
+    projects = await asyncio.to_thread(get_user_projects, username)
     if projects:
         logger.info(
             f"User {username} deleted. Notebook PVCs retained in projects: {projects}. "
@@ -307,21 +515,22 @@ def user_delete(body, spec, meta, **kwargs):
 
 @kopf.on.create("identity.karectl.io", "v1alpha1", "group")
 @kopf.on.update("identity.karectl.io", "v1alpha1", "group")
-def group_create_update(body, spec, meta, patch, **kwargs):
+async def group_create_update(body, spec, meta, patch, **kwargs):
     """ Operator function for creating and updating groups.
 
         Provisions notebook PVCs for group members when projects are configured.
+        Creates Gitea teams in project organisations.
     """
     groupname = meta["name"]
     projects = spec.get("projects", [])
 
-    ensure_realm_exists()
-    sync_keycloak_group(groupname, spec)
+    await asyncio.to_thread(ensure_realm_exists)
+    await asyncio.to_thread(sync_keycloak_group, groupname, spec)
     kopf.info(meta, reason="GroupSynced", message=f"Group {groupname} synced.")
 
     # Provision notebook storage for all members in all projects
     if projects:
-        members = get_group_members(groupname)
+        members = await asyncio.to_thread(get_group_members, groupname)
 
         if members:
             logger.info(f"Provisioning notebook storage for {len(members)} members of {groupname} in projects: {projects}")
@@ -329,14 +538,16 @@ def group_create_update(body, spec, meta, patch, **kwargs):
             all_results = {}
             for username in members:
                 try:
-                    user_uid = _get_user_uid(username)
+                    user_uid = await asyncio.to_thread(_get_user_uid, username)
                 except ApiException as e:
                     if e.status == 404:
                         logger.warning(f"User CRD not found for {username}, skipping PVC provisioning")
                         all_results[username] = {}
                         continue
                     raise
-                pvc_results = ensure_user_notebook_pvc(username, projects, user_uid)
+                pvc_results = await asyncio.to_thread(
+                    ensure_user_notebook_pvc, username, projects, user_uid
+                )
                 all_results[username] = pvc_results
 
             # Summarise results
@@ -375,12 +586,125 @@ def group_create_update(body, spec, meta, patch, **kwargs):
     else:
         logger.info(f"Group {groupname} has no projects configured")
 
+    # Gitea team provisioning where we add user to teams based on groups
+    if is_gitea_enabled() and projects:
+        gitea_config = spec.get("gitea", {}) or {}
+        team_name = gitea_config.get("team_name") or groupname
+        permission = gitea_config.get("permission", "write")
+        gitea_teams_created = []
+        gitea_errors = []
+        members = await asyncio.to_thread(get_group_members, groupname)
+
+        gitea_members_removed = []
+
+        for project_name in projects:
+            org_name = f"project-{project_name}"
+            try:
+                # Create team
+                team_result = await gitea_ensure_team(
+                    org_name=org_name,
+                    team_name=team_name,
+                    permission=permission,
+                )
+                team_id = team_result.get("team_id")
+
+                # Reconcile team membership in both directions against spec.members, so
+                # that removing a member from the Group CRD also revokes their Gitea access
+                if team_id:
+                    desired = set(members)
+                    try:
+                        current = set(await gitea_get_team_members(team_id))
+                    except Exception as e:
+                        # Fail closed on removals: without a reliable view of current
+                        # membership, only add, never remove
+                        logger.warning(f"Could not list members of Gitea team {org_name}/{team_name}: {e}")
+                        current = set()
+
+                    for member in sorted(desired - current):
+                        try:
+                            await gitea_add_user_to_team(team_id, member)
+                        except Exception as e:
+                            logger.warning(f"Could not add {member} to Gitea team: {e}")
+
+                    for member in sorted(current - desired):
+                        try:
+                            if await gitea_remove_user_from_team(team_id, member):
+                                gitea_members_removed.append(f"{org_name}/{team_name}:{member}")
+                                logger.info(f"Removed {member} from Gitea team {org_name}/{team_name}")
+                        except Exception as e:
+                            logger.warning(f"Could not remove {member} from Gitea team: {e}")
+
+                    gitea_teams_created.append(f"{org_name}/{team_name}")
+            except Exception as e:
+                logger.error(f"Failed to create Gitea team in {org_name}: {e}")
+                gitea_errors.append(f"{org_name}: {str(e)}")
+
+        patch.status["giteaTeams"] = {
+            "created": gitea_teams_created,
+            "membersRemoved": gitea_members_removed,
+            "errors": gitea_errors,
+        }
+
+        if gitea_members_removed:
+            kopf.info(
+                meta,
+                reason="GiteaTeamMembersRemoved",
+                message=f"Revoked Gitea team membership: {', '.join(gitea_members_removed)}",
+            )
+
+        if gitea_teams_created:
+            kopf.info(
+                meta,
+                reason="GiteaTeamsCreated",
+                message=f"Created Gitea teams: {', '.join(gitea_teams_created)}",
+            )
+        if gitea_errors:
+            kopf.warn(
+                meta,
+                reason="GiteaTeamError",
+                message=f"Failed to create some Gitea teams: {', '.join(gitea_errors)}",
+            )
+
 
 @kopf.on.delete("identity.karectl.io", "v1alpha1", "group")
-def group_delete(body, spec, meta, **kwargs):
-    """Operator function for deleting groups."""
+async def group_delete(body, spec, meta, **kwargs):
+    """ Operator function for deleting groups.
+
+        Revokes all members from the Gitea teams provisioned for this group's projects.
+    """
     groupname = meta["name"]
-    delete_keycloak_group(groupname)
+    projects = spec.get("projects", [])
+
+    await asyncio.to_thread(delete_keycloak_group, groupname)
+
+    # Revoke Gitea team membership for all group members across the group's projects
+    if is_gitea_enabled() and projects:
+        gitea_config = spec.get("gitea", {}) or {}
+        team_name = gitea_config.get("team_name") or groupname
+        members = await asyncio.to_thread(get_group_members, groupname)
+        gitea_teams_revoked = []
+
+        for project_name in projects:
+            org_name = f"project-{project_name}"
+            try:
+                team_id = await gitea_get_team_id(org_name, team_name)
+                if team_id and members:
+                    for member in members:
+                        try:
+                            await gitea_remove_user_from_team(team_id, member)
+                        except Exception as e:
+                            logger.warning(f"Could not remove {member} from Gitea team {org_name}/{team_name}: {e}")
+                    gitea_teams_revoked.append(f"{org_name}/{team_name}")
+            except Exception as e:
+                logger.warning(f"Could not revoke Gitea team membership in {org_name}/{team_name}: {e}")
+
+        if gitea_teams_revoked:
+            kopf.info(
+                meta,
+                reason="GiteaTeamMembersRevoked",
+                message=f"Revoked members from Gitea teams: {', '.join(gitea_teams_revoked)}",
+            )
+
     kopf.info(meta, reason="GroupDeleted", message=f"Group {groupname} deleted.")
 
 
@@ -409,10 +733,10 @@ def client_delete(body, spec, meta, **kwargs):
 @kopf.on.create("research.karectl.io", "v1alpha1", "project")
 @kopf.on.update("research.karectl.io", "v1alpha1", "project")
 @kopf.on.resume("research.karectl.io", "v1alpha1", "project")
-def project_create_update(body, spec, meta, patch, **kwargs):
+async def project_create_update(body, spec, meta, patch, **kwargs):
     """ Handle Project resource creation and updates.
-        Creates/updates: Project namespace, resource quota, limitRange, jupyterHub hub role binding and cilium network policy
-        for namespace isolation.
+        Creates/updates: Project namespace, resource quota, limitRange, jupyterHub hub role binding,
+        cilium network policy for namespace isolation, and Gitea organisation.
     """
     project_name = meta["name"]
     description = spec.get("description", "")
@@ -420,7 +744,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
 
     # Create/update project namespace
     try:
-        ns_result = ensure_proj_namespace(project_name, description)
+        ns_result = await asyncio.to_thread(ensure_proj_namespace, project_name, description)
         kopf.info(
             meta,
             reason="NamespaceReady",
@@ -437,7 +761,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     # ResourceQuota
     try:
         quota_spec = spec.get("resource_quota") or {}
-        quota_result = ensure_resource_quota(project_name, quota_spec)
+        quota_result = await asyncio.to_thread(ensure_resource_quota, project_name, quota_spec)
         kopf.info(
             meta,
             reason="QuotaReady",
@@ -453,7 +777,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     # LimitRange
     try:
         limit_spec = spec.get("limit_range") or {}
-        lr_result = ensure_limit_range(project_name, limit_spec)
+        lr_result = await asyncio.to_thread(ensure_limit_range, project_name, limit_spec)
         kopf.info(
             meta,
             reason="LimitRangeReady",
@@ -468,7 +792,7 @@ def project_create_update(body, spec, meta, patch, **kwargs):
 
     # JupyterHub hub service account RoleBinding
     try:
-        rb_result = ensure_jupyter_rolebind(project_name)
+        rb_result = await asyncio.to_thread(ensure_jupyter_rolebind, project_name)
         kopf.info(
             meta,
             reason="RoleBindingReady",
@@ -489,9 +813,14 @@ def project_create_update(body, spec, meta, patch, **kwargs):
     )
     try:
         ns_name = get_proj_namespace(project_name)
-        policy_result = create_project_network_policy(
+        approved_egress_rules = spec.get("approved_egress_rules") or []
+        gitea_egress_enabled = any(r.get("resource_type") == "Gitea" and r.get("enabled") for r in resources)
+        policy_result = await asyncio.to_thread(
+            create_project_network_policy,
             project_name,
             namespace=ns_name,
+            approved_egress_rules=approved_egress_rules,
+            gitea_enabled=gitea_egress_enabled,
             datashield_enabled=datashield_enabled,
         )
         kopf.info(
@@ -506,6 +835,103 @@ def project_create_update(body, spec, meta, patch, **kwargs):
             message=f"Failed to create network policy for {project_name}: {e}",
         )
 
+    # Project-level shared and read-only storage
+    project_uid = meta["uid"]
+    proj_namespace = get_proj_namespace(project_name)
+    for workspace_type in ("shared", "readonly"):
+        try:
+            size, storage_class = await asyncio.to_thread(
+                resolve_project_storage_config, project_name, workspace_type, spec
+            )
+            if size:
+                result = await asyncio.to_thread(
+                    ensure_project_pvc,
+                    namespace=proj_namespace,
+                    project_uid=project_uid,
+                    project_name=project_name,
+                    workspace_type=workspace_type,
+                    size=size,
+                    storage_class=storage_class,
+                )
+                kopf.info(
+                    meta,
+                    reason=f"{workspace_type.capitalize()}StorageReady",
+                    message=f"Project {workspace_type} storage {result['status']}: {result['name']}",
+                )
+            else:
+                logger.info(f"No {workspace_type} storage configured for project {project_name}, skipping")
+        except Exception as e:
+            kopf.warn(
+                meta,
+                reason=f"{workspace_type.capitalize()}StorageFailed",
+                message=f"Failed to ensure {workspace_type} storage for {project_name}: {e}",
+            )
+
+    # Gitea organisation setup.
+    # Config lives on the Gitea entry in spec.resources (Resource subclass), not a
+    # top-level spec.gitea block. An absent entry means Gitea was never requested for this
+    # project, so nothing is provisioned.
+    gitea_config = get_resource_entry(spec, "Gitea")
+    gitea_enabled = (
+        is_gitea_enabled()
+        and bool(gitea_config)
+        and gitea_config.get("enabled", False)
+    )
+
+    if gitea_enabled:
+        org_name = f"project-{project_name}"
+        gitea_status = {"organisation": org_name, "status": "pending", "teams": [], "errors": []}
+        try:
+            # Create organisation
+            org_result = await gitea_ensure_organisation(
+                org_name=org_name,
+                description=description or f"Project {project_name}",
+                visibility=gitea_config.get("visibility", "private"),
+            )
+
+            # Create a default admin team
+            admin_team = await gitea_ensure_team(
+                org_name=org_name,
+                team_name="admins",
+                permission="admin",
+            )
+            gitea_status["teams"].append("admins")
+
+            # Create members team with repo permissions
+            members_team = await gitea_ensure_team(
+                org_name=org_name,
+                team_name="members",
+                permission=gitea_config.get("default_repo_permission", "read"),
+            )
+            gitea_status["teams"].append("members")
+
+            # Create template repo
+            if gitea_config.get("create_template_repo", True):
+                await gitea_ensure_repository(
+                    org_name=org_name,
+                    repo_name="project-template",
+                    description="Project template repository",
+                    auto_init=True,
+                )
+
+            gitea_status["status"] = "ready"
+            kopf.info(
+                meta,
+                reason="GiteaOrgCreated",
+                message=f"Created Gitea organisation: {org_name}",
+            )
+
+        except Exception as e:
+            gitea_status["status"] = "error"
+            gitea_status["errors"].append(str(e))
+            kopf.warn(
+                meta,
+                reason="GiteaOrgError",
+                message=f"Failed to create Gitea organisation for {project_name}: {e}",
+            )
+
+        patch.status["gitea"] = gitea_status
+
     patch.status["namespace"] = get_proj_namespace(project_name)
     kopf.info(
         meta,
@@ -519,15 +945,37 @@ def project_create_update(body, spec, meta, patch, **kwargs):
 
 
 @kopf.on.delete("research.karectl.io", "v1alpha1", "project")
-def project_delete(body, spec, meta, **kwargs):
+async def project_delete(body, spec, meta, **kwargs):
     """ Handle Project resource deletion.
 
-    Deletes the project namespace with cascading deletion. Automatically removes all
-    resources within that namespace.
+        Deletes the project namespace with cascading deletion. Automatically removes all
+        resources within that namespace.
     """
     project_name = meta["name"]
+
+    # Delete Gitea organisation.
+    # Gated on the Gitea resource being declared, but deliberately not on its `enabled`
+    # flag: an organisation created while enabled must still be cleaned up if the project
+    # is disabled and then deleted.
+    if is_gitea_enabled() and get_resource_entry(spec, "Gitea"):
+        org_name = f"project-{project_name}"
+        try:
+            await gitea_delete_organisation(org_name)
+            kopf.info(
+                meta,
+                reason="GiteaOrgDeleted",
+                message=f"Deleted Gitea organisation: {org_name}",
+            )
+        except Exception as e:
+            kopf.warn(
+                meta,
+                reason="GiteaOrgDeleteFailed",
+                message=f"Failed to delete Gitea organisation {org_name}: {e}",
+            )
+
+    # Delete project namespace
     try:
-        ns_result = del_proj_namespace(project_name)
+        ns_result = await asyncio.to_thread(del_proj_namespace, project_name)
         kopf.info(
             meta,
             reason="NamespaceDeleted",

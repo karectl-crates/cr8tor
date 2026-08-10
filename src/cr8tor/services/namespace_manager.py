@@ -89,13 +89,13 @@ def ensure_resource_quota(project_name, quota_config=None):
         quota_config = {}
 
     hard = {
-        "requests.cpu": quota_config.get("requests_cpu", "4"),
-        "requests.memory": quota_config.get("requests_memory", "8Gi"),
-        "limits.cpu": quota_config.get("limits_cpu", "8"),
-        "limits.memory": quota_config.get("limits_memory", "16Gi"),
-        "pods": quota_config.get("pods", "20"),
-        "services": quota_config.get("services", "10"),
-        "persistentvolumeclaims": quota_config.get("persistentvolumeclaims", "10"),
+        "requests.cpu": quota_config.get("requests_cpu", "12"),
+        "requests.memory": quota_config.get("requests_memory", "24Gi"),
+        "limits.cpu": quota_config.get("limits_cpu", "48"),
+        "limits.memory": quota_config.get("limits_memory", "120Gi"),
+        "pods": quota_config.get("pods", "80"),
+        "services": quota_config.get("services", "30"),
+        "persistentvolumeclaims": quota_config.get("persistentvolumeclaims", "80"),
     }
 
     # Add storage quota if specified

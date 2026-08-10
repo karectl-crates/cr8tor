@@ -211,6 +211,8 @@ def create_deployment(
         "description": project_spec.description or project_props.name or "CR8TOR Project",
         "resources": serialised_resources,
     }
+    if deployment_config.get("resource_quota"):
+        spec_dict["resource_quota"] = deployment_config["resource_quota"]
     if deployment_config.get("limit_range"):
         spec_dict["limit_range"] = deployment_config["limit_range"]
     project_crd = {
