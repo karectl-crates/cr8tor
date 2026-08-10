@@ -1,4 +1,4 @@
-from keycloak.exceptions import KeycloakGetError, KeycloakPutError, KeycloakDeleteError
+from keycloak.exceptions import KeycloakGetError, KeycloakDeleteError
 from .client import get_client
 from .utils import generate_temp_password, write_passwords
 
@@ -11,8 +11,13 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
     password = spec.get("password")
     first_name = spec.get("given_name", "")
     last_name = spec.get("family_name", "")
-    user_created = False
     temp_password = None
+
+    attributes = {}
+    for key in ("expiry_date", "start_date", "affiliation"):
+        value = spec.get(key)
+        if value:
+            attributes[key] = [str(value)]
 
     user_payload = {
         "username": username,
@@ -20,6 +25,7 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
         "enabled": enabled,
         "firstName": first_name,
         "lastName": last_name,
+        "attributes": attributes,
     }
 
     # Try to get the user first
@@ -38,14 +44,15 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
             else:
                 raise
 
-    except KeycloakGetError:
-        # If user does not exist, create them
+    if user_id is None:
         print(f"[INFO] User {username} not found, creating.")
         user_id = keycloak_client.create_user(user_payload)
-        user_created = True
-
-    # Always get the actual user_id (in case it was just created)
-    user_id = keycloak_client.get_user_id(username)
+        needs_password = True
+    else:
+        keycloak_client.update_user(user_id, user_payload)
+        needs_password = len(keycloak_client.get_credentials(user_id)) == 0
+        if needs_password:
+            print(f"[INFO] User {username} exists with no credentials, setting password.")
 
     # Set a temp password if the user was just created
     if user_created or force_password_reset:
