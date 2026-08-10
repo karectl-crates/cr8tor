@@ -7,6 +7,8 @@ import os
 import kubernetes
 from kubernetes.client.exceptions import ApiException
 
+from cr8tor.services.resource_utils import get_resource_entry
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,11 +133,11 @@ def get_project_uid(project_name):
 
 def _get_resource_entry(spec, resource_type):
     """ Get resource entry by resource_type.
+
+    Thin wrapper kept for readability at the call sites in this module; the shared
+    implementation lives in cr8tor.services.resource_utils so the handlers can use it too.
     """
-    for entry in spec.get("resources", []):
-        if entry.get("resource_type") == resource_type:
-            return entry
-    return {}
+    return get_resource_entry(spec, resource_type)
 
 
 

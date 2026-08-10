@@ -30,6 +30,32 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.gitea.enabled }}
+      initContainers:
+        - name: wait-for-gitea-secret
+          image: alpine/k8s:1.29.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for api-credentials secret (timeout {{ .Values.gitea.secretWaitTimeoutSeconds }}s)..."
+              deadline=$(( $(date +%s) + {{ .Values.gitea.secretWaitTimeoutSeconds }} ))
+              until kubectl get secret {{ .Values.gitea.adminSecretName }} -n {{ .Release.Namespace }} >/dev/null 2>&1; do
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "Timed out waiting for secret {{ .Values.gitea.adminSecretName }}" >&2
+                  exit 1
+                fi
+                echo "  Secret not found, waiting..."
+                sleep 5
+              done
+              echo "Secret found..."
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 65534
+      {{- end }}
       containers:
         - name: operator
           image: {{ include "cr8tor-operator.image" . }}
@@ -68,17 +94,17 @@ spec:
             - name: KEYCLOAK_REALM
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: realm-name
             - name: KEYCLOAK_URL
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: keycloak-url
             - name: KEYCLOAK_VERIFY_TLS
               valueFrom:
                 configMapKeyRef:
-                  name: {{ .Values.keycloak.realmConfigMapName }}
+                  name: {{ .Values.servicesConfigMapName }}
                   key: keycloak-verify-tls
             # Identity namespace (where User/Group CRDs are stored)
             - name: IDENTITY_NAMESPACE
@@ -119,6 +145,31 @@ spec:
             {{- if .Values.storage.defaultReadonlySize }}
             - name: STORAGE_DEFAULT_READONLY_SIZE
               value: {{ .Values.storage.defaultReadonlySize | quote }}
+            {{- end }}
+            # Gitea configuration
+            {{- if .Values.gitea.enabled }}
+            - name: GITEA_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.servicesConfigMapName }}
+                  key: gitea-url
+                  optional: true
+            - name: GITEA_VERIFY_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Values.servicesConfigMapName }}
+                  key: gitea-verify-tls
+                  optional: true
+            - name: GITEA_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitea.adminSecretName }}
+                  key: api-token
+                  optional: true
+            {{- if .Values.gitea.oidcSourceId }}
+            - name: GITEA_OIDC_SOURCE_ID
+              value: {{ .Values.gitea.oidcSourceId | quote }}
+            {{- end }}
             {{- end }}
           {{- if .Values.vdiTemplates.enabled }}
           volumeMounts:
