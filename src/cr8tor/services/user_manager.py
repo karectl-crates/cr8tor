@@ -3,7 +3,7 @@ from .client import get_client
 from .utils import generate_temp_password, write_passwords
 
 
-def sync_keycloak_user(username, spec):
+def sync_keycloak_user(username, spec, force_password_reset=False):
     """Sync a user to Keycloak."""
     keycloak_client = get_client()
     email = spec.get("email")
@@ -28,7 +28,21 @@ def sync_keycloak_user(username, spec):
         "attributes": attributes,
     }
 
-    user_id = keycloak_client.get_user_id(username)
+    # Try to get the user first
+    try:
+        user_id = keycloak_client.get_user_id(username)
+        try:
+            # Preserve existing requiredActions
+            existing = keycloak_client.get_user(user_id)
+            payload = {**user_payload, "requiredActions": existing.get("requiredActions", [])}
+            keycloak_client.update_user(user_id, payload)
+        except KeycloakPutError as err:
+            if "User not found" in str(err):
+                print(f"[INFO] User {username} not found on update, creating instead.")
+                user_id = keycloak_client.create_user(user_payload)
+                user_created = True
+            else:
+                raise
 
     if user_id is None:
         print(f"[INFO] User {username} not found, creating.")
@@ -40,7 +54,8 @@ def sync_keycloak_user(username, spec):
         if needs_password:
             print(f"[INFO] User {username} exists with no credentials, setting password.")
 
-    if needs_password:
+    # Set a temp password if the user was just created
+    if user_created or force_password_reset:
         if password:
             keycloak_client.set_user_password(user_id, password, temporary=True)
             temp_password = password
