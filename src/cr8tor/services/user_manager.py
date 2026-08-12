@@ -1,4 +1,4 @@
-from keycloak.exceptions import KeycloakGetError, KeycloakDeleteError
+from keycloak.exceptions import KeycloakGetError, KeycloakPutError, KeycloakDeleteError
 from .client import get_client
 from .utils import generate_temp_password, write_passwords
 
@@ -11,6 +11,7 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
     password = spec.get("password")
     first_name = spec.get("given_name", "")
     last_name = spec.get("family_name", "")
+    user_created = False
     temp_password = None
 
     attributes = {}
@@ -29,8 +30,13 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
     }
 
     # Try to get the user first
-    try:
-        user_id = keycloak_client.get_user_id(username)
+    user_id = keycloak_client.get_user_id(username)
+
+    if user_id is None:
+        print(f"[INFO] User {username} not found, creating.")
+        user_id = keycloak_client.create_user(user_payload)
+        user_created = True
+    else:
         try:
             # Preserve existing requiredActions
             existing = keycloak_client.get_user(user_id)
@@ -44,18 +50,13 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
             else:
                 raise
 
-    if user_id is None:
-        print(f"[INFO] User {username} not found, creating.")
-        user_id = keycloak_client.create_user(user_payload)
-        needs_password = True
-    else:
-        keycloak_client.update_user(user_id, user_payload)
-        needs_password = len(keycloak_client.get_credentials(user_id)) == 0
-        if needs_password:
-            print(f"[INFO] User {username} exists with no credentials, setting password.")
+    # Self-heal: an existing account with zero credentials needs a password just like a new one.
+    needs_password = user_created or len(keycloak_client.get_credentials(user_id)) == 0
+    if needs_password and not user_created:
+        print(f"[INFO] User {username} exists with no credentials, setting password.")
 
-    # Set a temp password if the user was just created
-    if user_created or force_password_reset:
+    # Set a temp password if the user was just created or needs to be healed
+    if needs_password or force_password_reset:
         if password:
             keycloak_client.set_user_password(user_id, password, temporary=True)
             temp_password = password
