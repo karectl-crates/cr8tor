@@ -13,6 +13,8 @@ import kubernetes
 from kubernetes.client.exceptions import ApiException
 import yaml
 
+from cr8tor.services.gitea_client import is_gitea_enabled, get_gitea_network_target
+
 logger = logging.getLogger(__name__)
 
 # CiliumNetworkPolicy template for project isolation
@@ -93,7 +95,59 @@ spec:
 """
 
 
-def create_project_network_policy(project_name, namespace, approved_egress_rules=None):
+def _apply_gitea_rules(policy_body, gitea_enabled):
+    """ Add Gitea ingress/egress rules to a policy body, if Gitea is enabled.
+
+    Supports both an in-cluster Gitea (namespace selector) and an external or
+    ingress-fronted one (FQDN), on whatever ports are configured. Mutates policy_body.
+
+    Args:
+        policy_body: Parsed CiliumNetworkPolicy dict
+
+    Returns:
+        The Gitea FQDN when reached externally, otherwise None.
+    """
+    if not (is_gitea_enabled() and gitea_enabled):
+        return None
+
+    target = get_gitea_network_target()
+    to_ports = [
+        {"ports": [{"port": str(port), "protocol": "TCP"} for port in target["ports"]]}
+    ]
+
+    if target["mode"] == "cluster":
+        selector = [{
+            "matchLabels": {
+                "app.kubernetes.io/name": "gitea",
+                "k8s:io.kubernetes.pod.namespace": target["namespace"],
+            }
+        }]
+        policy_body["spec"]["ingress"].append({"fromEndpoints": selector, "toPorts": to_ports})
+        policy_body["spec"]["egress"].append(
+            {"toEndpoints": selector, "toPorts": to_ports}
+        )
+        return None
+
+    if target["fqdn"]:
+        policy_body["spec"]["egress"].append(
+            {"toFQDNs": [{"matchName": target["fqdn"]}], "toPorts": to_ports}
+        )
+        policy_body["spec"]["egress"].append({
+            "toEndpoints": [{
+                "matchLabels": {
+                    "app.kubernetes.io/name": "gitea",
+                    "k8s:io.kubernetes.pod.namespace": "gitea",
+                }
+            }],
+            "toPorts": [{"ports": [{"port": "3000", "protocol": "TCP"}]}],
+        })
+        return target["fqdn"]
+
+    logger.warning("Gitea is enabled but GITEA_URL has no resolvable host; no egress rule added")
+    return None
+
+
+def create_project_network_policy(project_name, namespace, approved_egress_rules=None, gitea_enabled=False):
     """ Create a CiliumNetworkPolicy in the project namespace.
 
     Args:
@@ -112,14 +166,20 @@ def create_project_network_policy(project_name, namespace, approved_egress_rules
     )
     policy_body = yaml.safe_load(policy_yaml)
 
+    gitea_fqdn = _apply_gitea_rules(policy_body, gitea_enabled)
+
     if approved_egress_rules:
         # Restrict DNS proxy to cluster-internal names and approved FQDNs only.
         dns_matches = [
             {"matchPattern": "*.cluster.local"},
             {"matchPattern": "*.internal"},
         ]
-        dns_matches.extend({"matchName": rule["fqdn"]}
-                           for rule in approved_egress_rules)
+        dns_matches.extend({"matchName": rule["fqdn"]} for rule in approved_egress_rules)
+        # An external Gitea must stay resolvable, or its toFQDNs rule can never match
+        if gitea_fqdn and not any(
+            rule["fqdn"] == gitea_fqdn for rule in approved_egress_rules
+        ):
+            dns_matches.append({"matchName": gitea_fqdn})
         for egress_rule in policy_body["spec"]["egress"]:
             for ep in egress_rule.get("toEndpoints", []):
                 if ep.get("matchLabels", {}).get("k8s-app") == "kube-dns":

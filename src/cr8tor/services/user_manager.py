@@ -14,17 +14,29 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
     user_created = False
     temp_password = None
 
+    attributes = {}
+    for key in ("expiry_date", "start_date", "affiliation"):
+        value = spec.get(key)
+        if value:
+            attributes[key] = [str(value)]
+
     user_payload = {
         "username": username,
         "email": email,
         "enabled": enabled,
         "firstName": first_name,
         "lastName": last_name,
+        "attributes": attributes,
     }
 
     # Try to get the user first
-    try:
-        user_id = keycloak_client.get_user_id(username)
+    user_id = keycloak_client.get_user_id(username)
+
+    if user_id is None:
+        print(f"[INFO] User {username} not found, creating.")
+        user_id = keycloak_client.create_user(user_payload)
+        user_created = True
+    else:
         try:
             # Preserve existing requiredActions
             existing = keycloak_client.get_user(user_id)
@@ -38,17 +50,13 @@ def sync_keycloak_user(username, spec, force_password_reset=False):
             else:
                 raise
 
-    except KeycloakGetError:
-        # If user does not exist, create them
-        print(f"[INFO] User {username} not found, creating.")
-        user_id = keycloak_client.create_user(user_payload)
-        user_created = True
+    # Self-heal: an existing account with zero credentials needs a password just like a new one.
+    needs_password = user_created or len(keycloak_client.get_credentials(user_id)) == 0
+    if needs_password and not user_created:
+        print(f"[INFO] User {username} exists with no credentials, setting password.")
 
-    # Always get the actual user_id (in case it was just created)
-    user_id = keycloak_client.get_user_id(username)
-
-    # Set a temp password if the user was just created
-    if user_created or force_password_reset:
+    # Set a temp password if the user was just created or needs to be healed
+    if needs_password or force_password_reset:
         if password:
             keycloak_client.set_user_password(user_id, password, temporary=True)
             temp_password = password
