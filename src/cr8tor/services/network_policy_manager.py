@@ -35,6 +35,8 @@ spec:
     # Allow all intra-namespace traffic
     - fromEndpoints:
         - {{}}
+    - fromEntities:
+        - host
     # Allow from kube-system
     - fromEndpoints:
         - matchLabels:
@@ -60,6 +62,8 @@ spec:
     # Allow all intra-namespace traffic
     - toEndpoints:
         - {{}}
+    - toEntities:
+        - kube-apiserver
     # Allow DNS resolution
     - toEndpoints:
         - matchLabels:
@@ -221,7 +225,8 @@ def create_project_network_policy(project_name, namespace, approved_egress_rules
             logger.info(f"Created CiliumNetworkPolicy in {namespace}")
             return {"status": "created", "name": policy_name, "namespace": namespace}
         else:
-            logger.error(f"Failed to create/update CiliumNetworkPolicy in {namespace}: {e}")
+            logger.error(
+                f"Failed to create/update CiliumNetworkPolicy in {namespace}: {e}")
             raise
 
 
@@ -250,8 +255,10 @@ def delete_project_network_policy(project_name, namespace):
         return {"status": "deleted", "name": policy_name, "namespace": namespace}
     except ApiException as e:
         if e.status == 404:
-            logger.info(f"CiliumNetworkPolicy not found in {namespace} (already deleted)")
+            logger.info(
+                f"CiliumNetworkPolicy not found in {namespace} (already deleted)")
             return {"status": "not_found", "name": policy_name, "namespace": namespace}
         else:
-            logger.error(f"Failed to delete CiliumNetworkPolicy from {namespace}: {e}")
+            logger.error(
+                f"Failed to delete CiliumNetworkPolicy from {namespace}: {e}")
             raise
